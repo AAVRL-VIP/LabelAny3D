@@ -291,6 +291,116 @@ def infer_with_hunyuan(out_dir, obj_id, gen_seed=0, gen_steps=50, max_faces_num=
         return None
 
 
+
+# =============================================================================
+# Amodal3R - Amodal Image to 3D Reconstruction
+# =============================================================================
+def load_amodal3r():
+    """Load Amodal3R model (lazy loading)."""
+    if 'amodal3r' not in _loaded_models:
+        _ensure_path('../external/Amodal3R')
+        # Avoid hard dependency on flash-attn wheels; xformers backend is fine.
+        os.environ.setdefault('ATTN_BACKEND', 'xformers')
+        os.environ.setdefault('SPCONV_ALGO', 'native')
+
+        from amodal3r.pipelines import Amodal3RImageTo3DPipeline
+
+        pipeline = Amodal3RImageTo3DPipeline.from_pretrained("Sm0kyWu/Amodal3R")
+        pipeline.cuda()
+        _loaded_models['amodal3r'] = pipeline
+        print("Amodal3R model loaded.")
+
+    return _loaded_models['amodal3r']
+
+
+def infer_with_amodal3r(out_dir, obj_id, seed=1, mesh_simplify=0.95, texture_size=1024):
+    """
+    Run Amodal3R inference on a single object.
+
+    Notes:
+    - Amodal3R expects a grayscale mask where:
+      background=255, visible=188, occluded=0.
+    - If *_rgba.png exists, visible region is taken from alpha.
+    - Otherwise fallback to *_reproj.png and build a visible mask from non-background pixels.
+
+    Args:
+        out_dir: Output directory (Path object)
+        obj_id: Object identifier string
+        seed: Random seed for generation
+        mesh_simplify: Mesh simplification factor for GLB export
+        texture_size: Texture resolution for GLB export
+
+    Returns:
+        Path to generated GLB file, or None if failed
+    """
+    from pathlib import Path
+    from PIL import Image
+    import numpy as np
+
+    print("Starting Amodal3R inference...")
+
+    try:
+        pipeline = load_amodal3r()
+
+        crop_dir = Path(out_dir) / "crops"
+        rgba_path = (crop_dir / f"{obj_id}_rgba.png").absolute()
+        reproj_path = (crop_dir / f"{obj_id}_reproj.png").absolute()
+
+        if rgba_path.exists():
+            print(f"Using RGBA crop: {rgba_path.name}")
+            image_rgba = Image.open(rgba_path).convert("RGBA")
+            image_rgb = image_rgba.convert("RGB")
+
+            alpha = np.array(image_rgba)[:, :, 3]
+            visible_mask = alpha > 127
+
+        elif reproj_path.exists():
+            print(f"RGBA crop not found. Using reproj crop: {reproj_path.name}")
+            reproj_img = Image.open(reproj_path).convert("RGB")
+            image_rgb = reproj_img
+
+            reproj_np = np.array(reproj_img)
+
+            # 흰 배경(또는 거의 흰색 배경)을 background로 간주
+            # 필요하면 threshold 조절 가능
+            visible_mask = np.any(reproj_np < 250, axis=2)
+
+        else:
+            print(f"No crop found for {obj_id}: neither RGBA nor reproj exists.")
+            return None
+
+        # Amodal3R mask format:
+        # background = 255, visible = 188, occluded = 0
+        mask_np = np.full(visible_mask.shape, 255, dtype=np.uint8)
+        mask_np[visible_mask] = 188
+        mask_img = Image.fromarray(mask_np, mode="L")
+
+        outputs = pipeline.run_multi_image(
+            [image_rgb],
+            [mask_img],
+            seed=seed,
+        )
+
+        from amodal3r.utils import postprocessing_utils
+
+        glb = postprocessing_utils.to_glb(
+            outputs['gaussian'][0],
+            outputs['mesh'][0],
+            simplify=mesh_simplify,
+            texture_size=texture_size,
+            verbose=False,
+        )
+
+        target_mesh = Path(out_dir) / "object_space" / f"{obj_id}.glb"
+        glb.export(str(target_mesh))
+        print(f"Amodal3R inference complete: {target_mesh}")
+        return target_mesh
+
+    except Exception as e:
+        print(f"Amodal3R inference failed for {obj_id}: {e}")
+        return None
+
+
 # =============================================================================
 # MoGe - Monocular Geometry Estimation
 # =============================================================================
@@ -494,6 +604,27 @@ def run_entityv2(image, threshold=0.1, max_size=1500):
     import numpy as np
     import cv2
     import torchvision.transforms.functional as Ftv
+    from pathlib import Path
+
+    # Locate CropFormer root in common layouts.
+    cropformer_candidates = [
+        Path('../external/Entity/Entityv2/CropFormer'),
+        Path('../external/detectron2/projects/CropFormer'),
+        Path('../external/CropFormer'),
+    ]
+    cropformer_root = None
+    for c in cropformer_candidates:
+        if c.exists():
+            cropformer_root = c
+            break
+    if cropformer_root is None:
+        raise ModuleNotFoundError(
+            'CropFormer root not found. Expected one of: ' + ', '.join(str(c) for c in cropformer_candidates)
+        )
+
+    # Ensure both package root and demo module path are importable.
+    _ensure_path(str(cropformer_root))
+    _ensure_path(str(cropformer_root / 'demo_cropformer'))
 
     from detectron2.data import MetadataCatalog, DatasetCatalog
     from detectron2.modeling import BACKBONE_REGISTRY, SEM_SEG_HEADS_REGISTRY
@@ -502,13 +633,13 @@ def run_entityv2(image, threshold=0.1, max_size=1500):
     def_keys = list(DatasetCatalog.keys())
 
     from detectron2.config import get_cfg
-    from demo_cropformer.predictor import VisualizationDemo
+    from predictor import VisualizationDemo
     from detectron2.projects.deeplab import add_deeplab_config
     from mask2former import add_maskformer2_config
 
     CropFormerCfg = {
-        'config_file': "../external/detectron2/projects/CropFormer/configs/entityv2/entity_segmentation/cropformer_hornet_3x.yaml",
-        'opts': ["MODEL.WEIGHTS", "../external/checkpoints/CropFormer_hornet_3x_03823a.pth"],
+        'config_file': str(cropformer_root / 'configs/entityv2/entity_segmentation/cropformer_hornet_3x.yaml'),
+        'opts': ['MODEL.WEIGHTS', '../external/checkpoints/CropFormer_hornet_3x_03823a.pth'],
     }
     cfg = get_cfg()
     add_deeplab_config(cfg)
@@ -535,8 +666,8 @@ def run_entityv2(image, threshold=0.1, max_size=1500):
     BACKBONE_REGISTRY._obj_map = {}
     SEM_SEG_HEADS_REGISTRY._obj_map = {}
 
-    pred_masks = predictions["instances"].pred_masks
-    pred_scores = predictions["instances"].scores
+    pred_masks = predictions['instances'].pred_masks
+    pred_scores = predictions['instances'].scores
     selected_indexes = (pred_scores >= threshold)
     selected_masks = pred_masks[selected_indexes]
     selected_masks = Ftv.resize(selected_masks.cpu(), orig_size[:-1]).numpy() > 0.5
@@ -625,6 +756,7 @@ def run_ovsam(image, masks, max_samples=5):
     Returns:
         Tuple of (tags, scores)
     """
+    _ensure_path('../external/ovsam')
     from image_tagger import ImageTagger
 
     tagger = ImageTagger()

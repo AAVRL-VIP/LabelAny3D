@@ -1,7 +1,0 @@
---find-links https://download.pytorch.org/whl/cu121
-rembg
-einops
-accelerate
-PyMCubes
-xatlas
-typeguard

@@ -6,6 +6,9 @@ and RANSAC to align MoGe depth to DepthPro scale.
 
 Usage:
     python batch_scripts/depth.py --start_index 0 --end_index 100 --split val
+
+Single-image usage:
+    python batch_scripts/depth.py --split single --image_path /path/to/image.jpg
 """
 import argparse
 from omegaconf import OmegaConf
@@ -13,10 +16,12 @@ import sys
 import os
 from tqdm import tqdm
 import torch
+
 sys.path = [
     './',
     '../external/MoGe',
 ] + sys.path
+
 from dataset_model import get_scene
 from pathlib import Path
 import numpy as np
@@ -63,7 +68,10 @@ def align_depth(relative_depth, metric_depth, mask=None, min_samples=0.2, max_va
     Returns:
         Aligned metric depth map.
     """
-    regressor = RANSACRegressor(estimator=LinearRegression(fit_intercept=False), min_samples=min_samples)
+    regressor = RANSACRegressor(
+        estimator=LinearRegression(fit_intercept=False),
+        min_samples=min_samples
+    )
 
     valid = (~np.isinf(relative_depth)) & (metric_depth < max_valid_depth)
     if mask is not None:
@@ -74,7 +82,10 @@ def align_depth(relative_depth, metric_depth, mask=None, min_samples=0.2, max_va
         return metric_depth
 
     try:
-        regressor.fit(relative_depth[valid].reshape(-1, 1), metric_depth[valid].reshape(-1, 1))
+        regressor.fit(
+            relative_depth[valid].reshape(-1, 1),
+            metric_depth[valid].reshape(-1, 1)
+        )
     except Exception as e:
         print(f"Error fitting RANSACRegressor: {e}, using metric depth directly")
         return metric_depth
@@ -100,28 +111,58 @@ if __name__ == "__main__":
     parser.add_argument('--end_index', type=int, default=1, help='Object index to end processing')
     parser.add_argument("--split", help="split", default="val", type=str)
     parser.add_argument("--save_dir", help="save directory", default="../experimental_results/COCO/", type=str)
+    parser.add_argument("--image_path", type=str, default="", help="single image path for single-image mode")
 
     args, extras = parser.parse_known_args()
     opt = OmegaConf.merge(OmegaConf.load(args.config), OmegaConf.from_cli(extras))
 
-    # Load COCONUT data
-    dataset_root, annotations_dir = get_dataset_paths(args.split)
-    loader = CoconutLoader(split=args.split, annotations_dir=annotations_dir)
+    if args.split == "single":
+        if not args.image_path:
+            raise ValueError("--split single requires --image_path")
+
+        image_path = args.image_path
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"Image not found: {image_path}")
+
+        image_infos = [{
+            "id": 0,
+            "file_name": os.path.basename(image_path),
+            "full_path": image_path,
+        }]
+        dataset_root = None
+        loader = None
+    else:
+        dataset_root, annotations_dir = get_dataset_paths(args.split)
+        loader = CoconutLoader(split=args.split, annotations_dir=annotations_dir)
+        image_infos = [
+            loader.get_image_by_index(i)
+            for i in range(args.start_index, args.end_index)
+        ]
 
     assert torch.cuda.is_available()
     device = f"cuda:{args.gpu_idx}"
 
-    # Load DepthPro model once
     print("Loading DepthPro model...")
-    depthpro_model, depthpro_transform = depth_pro.create_model_and_transforms(device=device, precision=torch.float16)
+    depthpro_model, depthpro_transform = depth_pro.create_model_and_transforms(
+        device=device,
+        precision=torch.float16
+    )
     depthpro_model.eval()
     print("DepthPro model loaded.")
 
-    for i in tqdm(range(args.start_index, args.end_index)):
-        image_info = loader.get_image_by_index(i)
-        img_name = image_info["file_name"]
-        image_path = os.path.join(dataset_root, img_name)
-        output_dir = os.path.join(args.save_dir, args.split, img_name.split(".")[0].replace("/", "_").replace("-", "_"))
+    for image_info in tqdm(image_infos):
+        if args.split == "single":
+            image_id = image_info["id"]
+            image_path = image_info["full_path"]
+            img_name = image_info["file_name"]
+            scene_name = Path(img_name).stem
+        else:
+            image_id = image_info["id"]
+            img_name = image_info["file_name"]
+            image_path = os.path.join(dataset_root, img_name)
+            scene_name = img_name.split(".")[0].replace("/", "_").replace("-", "_")
+
+        output_dir = os.path.join(args.save_dir, args.split, scene_name)
 
         opt.scene.attributes.img_path = image_path
         scene = get_scene(opt.scene.type, opt.scene.attributes)
@@ -133,28 +174,31 @@ if __name__ == "__main__":
         (out_dir / "object_space").mkdir(exist_ok=True)
         (out_dir / "reconstruction").mkdir(exist_ok=True)
 
-        # Save input image
         if not os.path.exists(out_dir / 'input.png'):
             scene.image_pil.save(out_dir / 'input.png')
 
-        # Skip if already processed
         if os.path.exists(out_dir / 'depth_map.npy') and os.path.exists(out_dir / 'cam_params.json'):
+            print(f"Skipping already processed scene: {scene_name}")
             continue
 
-        # Step 1: MoGe - Scale-invariant depth estimation
-        _, moge_depth_map, moge_mask, K_img = infer_geometry_on_image(f'{out_dir}/input.png', out_dir)
+        _, moge_depth_map, moge_mask, K_img = infer_geometry_on_image(
+            f'{out_dir}/input.png',
+            out_dir
+        )
 
-        # Step 2: DepthPro - Metric depth estimation
         img = depthpro_transform(scene.image_pil)
         prediction = depthpro_model.infer(img, f_px=K_img[0, 0])
         pro_depth_map = prediction["depth"].cpu().numpy()
 
-        # Step 3: Align depth and save results
         depth_map = align_depth(moge_depth_map, pro_depth_map, mask=moge_mask)
         pts3d = depth_to_points(depth_map[None], K_img)
+
         save_moge_data(scene.image_np, pts3d, depth_map, moge_mask, out_dir)
         np.save(out_dir / 'depth_map.npy', depth_map)
-        trimesh.PointCloud(pts3d.reshape(-1, 3), scene.image_np.reshape(-1, 3)).export(out_dir / 'depth_scene.ply')
+        trimesh.PointCloud(
+            pts3d.reshape(-1, 3),
+            scene.image_np.reshape(-1, 3)
+        ).export(out_dir / 'depth_scene.ply')
 
         pose = np.eye(4)
         cam_params = {
@@ -162,6 +206,8 @@ if __name__ == "__main__":
             'c2w': pose.tolist(),
             'W': scene.image_pil.width,
             'H': scene.image_pil.height,
+            'image_id': image_id,
+            'image_path': image_path,
         }
         with open(out_dir / 'cam_params.json', 'w') as fp:
-            json.dump(cam_params, fp)
+            json.dump(cam_params, fp, indent=2)

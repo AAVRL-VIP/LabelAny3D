@@ -4,10 +4,12 @@ import sys
 import os
 from tqdm import tqdm
 import torch
-sys.path = ['./',] + sys.path
+
+sys.path = ['./'] + sys.path
+
 from dataset_model import get_scene
 from pathlib import Path
-from model_wrappers import infer_with_trellis, infer_with_hunyuan
+from model_wrappers import infer_with_trellis, infer_with_hunyuan, infer_with_amodal3r
 from batch_scripts.coconut_loader import CoconutLoader, get_dataset_paths
 
 
@@ -18,8 +20,11 @@ def reconstruct_object(run_opt, out_dir, obj_id):
     elif run_opt.obj_rec == 'hunyuan3d':
         print("hunyuan3d is used for reconstruction")
         infer_with_hunyuan(out_dir, obj_id)
+    elif run_opt.obj_rec == 'amodal3r':
+        print("amodal3r is used for reconstruction")
+        infer_with_amodal3r(out_dir, obj_id)
     else:
-        raise ValueError(f"Unknown reconstruction model: {run_opt.obj_rec}. Use 'trellis' or 'hunyuan3d'.")
+        raise ValueError(f"Unknown reconstruction model: {run_opt.obj_rec}. Use 'trellis', 'hunyuan3d', or 'amodal3r'.")
 
 
 if __name__ == "__main__":
@@ -31,22 +36,46 @@ if __name__ == "__main__":
     parser.add_argument('--end_index', type=int, default=1, help='Object index to end processing')
     parser.add_argument("--split", help="split", default="val", type=str)
     parser.add_argument("--save_dir", help="save directory", default="../experimental_results/COCO/", type=str)
-    parser.add_argument("--obj_rec", help="reconstruction model", default="trellis", choices=["trellis", "hunyuan3d"], type=str)
+    parser.add_argument("--obj_rec", help="reconstruction model", default="trellis", choices=["trellis", "hunyuan3d", "amodal3r"], type=str)
+    parser.add_argument("--image_path", type=str, default="", help="single image path for single-image mode")
 
     args, extras = parser.parse_known_args()
     opt = OmegaConf.merge(OmegaConf.load(args.config), OmegaConf.from_cli(extras))
 
-    # Load COCONUT data
-    dataset_root, annotations_dir = get_dataset_paths(args.split)
-    loader = CoconutLoader(split=args.split, annotations_dir=annotations_dir)
+    if args.split == "single":
+        if not args.image_path:
+            raise ValueError("--split single requires --image_path")
+        if not os.path.exists(args.image_path):
+            raise FileNotFoundError(f"Image not found: {args.image_path}")
 
-    assert (torch.cuda.is_available())
+        image_infos = [{
+            "id": 0,
+            "file_name": os.path.basename(args.image_path),
+            "full_path": args.image_path,
+        }]
+        dataset_root = None
+        loader = None
+    else:
+        dataset_root, annotations_dir = get_dataset_paths(args.split)
+        loader = CoconutLoader(split=args.split, annotations_dir=annotations_dir)
+        image_infos = [
+            loader.get_image_by_index(i)
+            for i in range(args.start_index, args.end_index)
+        ]
 
-    for i in tqdm(range(args.start_index, args.end_index)):
-        image_info = loader.get_image_by_index(i)
-        img_name = image_info["file_name"]
-        image_path = os.path.join(dataset_root, img_name)
-        output_dir = os.path.join(args.save_dir, args.split, img_name.split(".")[0].replace("/", "_").replace("-", "_"))
+    assert torch.cuda.is_available()
+
+    for image_info in tqdm(image_infos):
+        if args.split == "single":
+            img_name = image_info["file_name"]
+            image_path = image_info["full_path"]
+            scene_name = Path(img_name).stem
+        else:
+            img_name = image_info["file_name"]
+            image_path = os.path.join(dataset_root, img_name)
+            scene_name = img_name.split(".")[0].replace("/", "_").replace("-", "_")
+
+        output_dir = os.path.join(args.save_dir, args.split, scene_name)
 
         opt.scene.attributes.img_path = image_path
         opt.run.obj_rec = args.obj_rec
@@ -60,15 +89,26 @@ if __name__ == "__main__":
         (out_dir / "reconstruction").mkdir(exist_ok=True)
 
         crop_root = out_dir / "crops"
-        crop_paths = list(crop_root.glob("*_reproj.png"))
-        for i in range(len(crop_paths) - 1, -1, -1):
-            crop_path = crop_paths[i]
+        crop_paths = sorted(list(crop_root.glob("*_reproj.png")))
+
+        if len(crop_paths) == 0:
+            print(f"No crop images found in {crop_root}")
+            continue
+
+        for crop_path in crop_paths[::-1]:
             obj_id = crop_path.stem.replace("_reproj", "")
             label = obj_id.split("_", 1)[-1]
 
-            # Check if full crop exists
             full_crop_path = out_dir / "crops" / f"{obj_id}_rgba.png"
+            if not full_crop_path.exists():
+                print(f"Warning: full crop not found for {obj_id}, using reproj crop only.")
+
             object_space_path = out_dir / "object_space" / f"{obj_id}.glb"
 
-            if not object_space_path.exists():
-                reconstruct_object(opt.run, out_dir, obj_id)
+            if object_space_path.exists():
+                print(f"Skipping existing reconstruction: {object_space_path.name}")
+                continue
+
+            print(f"Reconstructing {obj_id} with {args.obj_rec}")
+            reconstruct_object(opt.run, out_dir, obj_id)
+            print(f"Finished reconstruction for {obj_id}")

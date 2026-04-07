@@ -45,3 +45,8 @@ src/tools/*.json
 experimental_results
 CLAUDE.md
 .claude/
+experimental_results/
+dataset/
+external/
+run_single_image.sh
+src/taming-transformers/

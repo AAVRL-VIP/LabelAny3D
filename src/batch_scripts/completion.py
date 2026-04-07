@@ -4,11 +4,13 @@ import sys
 import os
 from tqdm import tqdm
 import torch
+
 sys.path = [
     './',
     '../external/dreamgaussian',
     '../external/One-2-3-45',
 ] + sys.path
+
 from dataset_model import get_scene
 from pathlib import Path
 from PIL import Image
@@ -25,24 +27,48 @@ if __name__ == "__main__":
     parser.add_argument('--end_index', type=int, default=1, help='Object index to end processing')
     parser.add_argument("--split", help="split", default="val", type=str)
     parser.add_argument("--save_dir", help="save directory", default="../experimental_results/COCO/", type=str)
+    parser.add_argument("--image_path", type=str, default="", help="single image path for single-image mode")
 
     args, extras = parser.parse_known_args()
     opt = OmegaConf.merge(OmegaConf.load(args.config), OmegaConf.from_cli(extras))
 
-    # Load COCONUT data
-    dataset_root, annotations_dir = get_dataset_paths(args.split)
-    loader = CoconutLoader(split=args.split, annotations_dir=annotations_dir)
+    if args.split == "single":
+        if not args.image_path:
+            raise ValueError("--split single requires --image_path")
+        if not os.path.exists(args.image_path):
+            raise FileNotFoundError(f"Image not found: {args.image_path}")
 
-    assert (torch.cuda.is_available())
+        image_infos = [{
+            "id": 0,
+            "file_name": os.path.basename(args.image_path),
+            "full_path": args.image_path,
+        }]
+        dataset_root = None
+        loader = None
+    else:
+        dataset_root, annotations_dir = get_dataset_paths(args.split)
+        loader = CoconutLoader(split=args.split, annotations_dir=annotations_dir)
+        image_infos = [
+            loader.get_image_by_index(i)
+            for i in range(args.start_index, args.end_index)
+        ]
+
+    assert torch.cuda.is_available()
     device = f"cuda:{args.gpu_idx}"
 
     acompletion_p = initialize_acompletion(device)
 
-    for i in tqdm(range(args.start_index, args.end_index)):
-        image_info = loader.get_image_by_index(i)
-        img_name = image_info["file_name"]
-        image_path = os.path.join(dataset_root, img_name)
-        output_dir = os.path.join(args.save_dir, args.split, img_name.split(".")[0].replace("/", "_").replace("-", "_"))
+    for image_info in tqdm(image_infos):
+        if args.split == "single":
+            img_name = image_info["file_name"]
+            image_path = image_info["full_path"]
+            scene_name = Path(img_name).stem
+        else:
+            img_name = image_info["file_name"]
+            image_path = os.path.join(dataset_root, img_name)
+            scene_name = img_name.split(".")[0].replace("/", "_").replace("-", "_")
+
+        output_dir = os.path.join(args.save_dir, args.split, scene_name)
 
         opt.scene.attributes.img_path = image_path
         opt.run.amodal_completion = 'our'
@@ -56,15 +82,23 @@ if __name__ == "__main__":
         (out_dir / "reconstruction").mkdir(exist_ok=True)
 
         crop_root = out_dir / "crops"
-        crop_paths = list(crop_root.glob("*_reproj.png"))
-        for i in range(len(crop_paths) - 1, -1, -1):
-            crop_path = crop_paths[i]
+        crop_paths = sorted(list(crop_root.glob("*_reproj.png")))
+
+        if len(crop_paths) == 0:
+            print(f"No crop images found in {crop_root}")
+            continue
+
+        for crop_path in crop_paths[::-1]:
             obj_id = crop_path.stem.replace("_reproj", "")
             label = obj_id.split("_", 1)[-1]
 
-            # Check if full crop exists
             full_crop_path = out_dir / "crops" / f"{obj_id}_rgba.png"
-            if not full_crop_path.exists():
-                crop = Image.open(crop_path)
-                full_crop = complete_crop(crop, label, acompletion_p, opt.run.amodal_completion)
-                full_crop.save(full_crop_path)
+            if full_crop_path.exists():
+                print(f"Skipping existing completion: {full_crop_path.name}")
+                continue
+
+            print(f"Completing {crop_path.name} with label '{label}'")
+            crop = Image.open(crop_path)
+            full_crop = complete_crop(crop, label, acompletion_p, opt.run.amodal_completion)
+            full_crop.save(full_crop_path)
+            print(f"Saved: {full_crop_path}")

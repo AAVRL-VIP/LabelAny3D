@@ -374,7 +374,8 @@ def read_bounding_boxes_segmentations(annotations_path_or_list, image_size):
             is_truncated, is_scaleable = analyze_mask(mask, image_size)
             if (height/image_size[1] > 0.0625 and not is_truncated and is_scaleable): # object must be 6.25% of the orginal image height
                 segmentation_mask.append(mask)
-                category_ids.append(annotation["category_id"])
+                # Prefer annotation-provided category_name when available (single-image pipeline).
+                category_ids.append(annotation.get("category_name", annotation["category_id"]))
                 bboxes.append(annotation["bbox"])  # Add the bbox to the list
             else:
                 print("Too small segmentation")
@@ -452,10 +453,12 @@ COCO_CATEGORIES = {
 
 
 def replace_categories_with_supercategories(category_ids, json_file_path=None):
-    """Map category IDs to category names using built-in COCO/COCONUT mapping."""
+    """Map category IDs to category names, while preserving pre-labeled string categories."""
     updated_categories = []
     for category_id in category_ids:
-        if category_id in COCO_CATEGORIES:
+        if isinstance(category_id, str):
+            updated_categories.append(category_id)
+        elif category_id in COCO_CATEGORIES:
             updated_categories.append(COCO_CATEGORIES[category_id])
         else:
             updated_categories.append("unknown")
