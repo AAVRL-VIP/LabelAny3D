@@ -288,7 +288,7 @@ def draw_cube(scene_dir, is_ground=False):
     output_file = 'vis_3dbox.png' if is_ground else 'vis_3dbox_no_ground.png'
     cv2.imwrite(os.path.join(scene_dir, output_file), image)
 
-def analyze_mask(mask, image_size, scale_threshold=100, boundary_threshold=10):
+def analyze_mask(mask, image_size, scale_threshold=1, boundary_threshold=1):
     """
     Analyzes a binary mask for scale and boundary truncation.
     """
@@ -323,7 +323,7 @@ def analyze_mask(mask, image_size, scale_threshold=100, boundary_threshold=10):
     # Total boundary truncation
     total_truncation = top_intersection + bottom_intersection + left_intersection + right_intersection
 
-    return total_truncation >= 10, scale >= scale_threshold
+    return total_truncation >= 100, scale >= scale_threshold
 
 def get_maximum_height(binary_mask):
     # Find rows containing the object
@@ -372,7 +372,7 @@ def read_bounding_boxes_segmentations(annotations_path_or_list, image_size):
                 mask, height = create_boolean_mask_from_polygon(image_size, seg)
 
             is_truncated, is_scaleable = analyze_mask(mask, image_size)
-            if (height/image_size[1] > 0.0625 and not is_truncated and is_scaleable): # object must be 6.25% of the orginal image height
+            if (height/image_size[1] > 0.000625 and not is_truncated and is_scaleable): # object must be 6.25% of the orginal image height
                 segmentation_mask.append(mask)
                 # Prefer annotation-provided category_name when available (single-image pipeline).
                 category_ids.append(annotation.get("category_name", annotation["category_id"]))
