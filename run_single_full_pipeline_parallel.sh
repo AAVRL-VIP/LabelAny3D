@@ -140,7 +140,7 @@ try:
         if len(fg_idx) > 0:
             masks = [seg_masks[i] for i in fg_idx]
             try:
-                labels = run_ovsam(img, np.array(masks))
+                labels = run_ovsam(img, np.array(masks).astype(np.uint8) * 255)
             except Exception as e:
                 print(f"OVSAM failed, falling back to generic labels: {e}")
                 labels = ["object"] * len(masks)
@@ -179,6 +179,13 @@ if len(labels) != len(masks):
 for i, m in enumerate(masks):
     m = np.asarray(m).astype(np.uint8)
     if m.sum() < min_mask_area:
+        continue
+    # 경계에 걸친 마스크 제외
+    is_truncated = (
+        m[0, :].any() or m[-1, :].any() or
+        m[:, 0].any() or m[:, -1].any()
+    )
+    if is_truncated:
         continue
     ys, xs = np.where(m > 0)
     if len(xs) == 0:
@@ -259,7 +266,12 @@ print(f"Saved: {ann_path}")
 print(f"Segmentation preview: {seg_dir / 'overlay.png'}")
 print(f"Num instances: {len(annotations)}")
 if len(annotations) == 0:
-    raise RuntimeError("No valid segmentation instances were produced.")
+    if keep_labels:
+        print("가구가 감지되지 않았습니다. 소파, 침대, 테이블 등 큰 가구가 잘 보이도록 촬영해주세요.")
+        import sys
+        sys.exit(0)
+    else:
+        raise RuntimeError("No valid segmentation instances were produced.")
 PY
 fi
 T1_ELAPSED=$(( SECONDS - T1_START ))
@@ -412,4 +424,8 @@ echo "Timing saved to: $TIMING_FILE"
 echo "Result: $RESULT_SCENE_DIR/3dbbox.json"
 
 echo "=== 부피 계산 ==="
-python3 /workspace/LabelAny3D/src/calc_volume.py "$RESULT_SCENE_DIR/3dbbox.json"
+if [ -f "$RESULT_SCENE_DIR/3dbbox.json" ]; then
+    python3 /workspace/LabelAny3D/src/calc_volume.py "$RESULT_SCENE_DIR/3dbbox.json"
+else
+    echo "감지된 가구가 없어 부피 계산을 건너뜁니다."
+fi

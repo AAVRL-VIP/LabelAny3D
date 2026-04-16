@@ -786,7 +786,7 @@ def complete_object(crop, label, model):
     completed = model(
         prompt=label,
         image=image,
-        num_inference_steps=50,
+        num_inference_steps=40,
         image_guidance_scale=1.5,
         guidance_scale=8.5,
         num_images_per_prompt=1

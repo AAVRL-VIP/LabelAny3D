@@ -495,3 +495,74 @@ def align_to_depth_match(mask, depth_map, object_name, project_root, model):
     transform[:3, -1] = T[:3] * scale
     
     return transform
+
+def draw_cube_with_labels(scene_dir, furniture_only=True):
+    import os, json
+    import numpy as np
+    import cv2
+    from PIL import Image
+
+    furniture_keywords = {
+        "furniture", "chair", "table", "desk", "sofa", "couch", "bed", "cabinet",
+        "drawer", "shelf", "bookshelf", "bookcase", "wardrobe", "dresser",
+        "stool", "bench", "nightstand", "tv stand", "cupboard"
+    }
+
+    with open(os.path.join(scene_dir, "cam_params.json"), 'r') as f:
+        cam_param = json.load(f)
+    K = np.array(cam_param["K"])
+
+    with open(os.path.join(scene_dir, "3dbbox.json"), 'r') as f:
+        cube_list = json.load(f)
+
+    # segmentation labels 로드
+    label_map = {}
+    seg_label_path = os.path.join(scene_dir, "segmentation/labels.json")
+    if os.path.exists(seg_label_path):
+        with open(seg_label_path, 'r') as f:
+            seg_labels = json.load(f)
+        for item in seg_labels:
+            obj_id = str(item["ann_id"] - 1)
+            label_map[obj_id] = item["label"]
+
+    image = Image.open(os.path.join(scene_dir, "input.png"))
+    image = np.array(image)
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+    for cube in cube_list:
+        obj_id = str(cube["obj_id"])
+        label = label_map.get(obj_id, cube.get("category_name", "object"))
+
+        # 가구만 그리기
+        if furniture_only:
+            label_l = label.lower()
+            is_furniture = any(w in label_l for w in furniture_keywords)
+            if not is_furniture:
+                continue
+
+        verts = cube["bbox3D_cam"]
+        points_2d = [project_to_2d(np.array(p), K) for p in verts]
+        points_2d = np.array(points_2d)
+
+        min_y = float('inf')
+        topmost_point = None
+        for p in points_2d:
+            if p[1] < min_y:
+                min_y = p[1]
+                topmost_point = p
+
+        for p in points_2d:
+            cv2.circle(image, tuple(np.round(p).astype(int)), radius=3, color=(0, 255, 0), thickness=-1)
+
+        edges = [(0,1),(1,2),(2,3),(3,0),(4,5),(5,6),(6,7),(7,4),(0,4),(1,5),(2,6),(3,7)]
+        for s, e in edges:
+            cv2.line(image, tuple(np.round(points_2d[s]).astype(int)),
+                     tuple(np.round(points_2d[e]).astype(int)), (255, 0, 0), 2)
+
+        if topmost_point is not None:
+            text_pos = (int(topmost_point[0]), int(topmost_point[1]) - 10)
+            cv2.putText(image, f'{obj_id}:{label}', text_pos,
+                       cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2)
+
+    cv2.imwrite(os.path.join(scene_dir, "vis_3dbox_labeled.png"), image)
+    print("저장 완료: vis_3dbox_labeled.png")
