@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LabelAny3D Demo</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --line: #dbe3ef;
+      --accent: #0f766e;
+      --accent-2: #14b8a6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Pretendard", "Noto Sans KR", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(1200px 400px at -10% -20%, #c3f0f7 0%, transparent 60%),
+        radial-gradient(1000px 400px at 120% -10%, #f9e7be 0%, transparent 60%),
+        var(--bg);
+      min-height: 100vh;
+      padding: 32px 16px;
+    }
+    .wrap {
+      max-width: 860px;
+      margin: 0 auto;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
+      padding: 22px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      letter-spacing: -0.02em;
+    }
+    p {
+      margin: 0 0 16px;
+      color: var(--muted);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 6px; }
+    input, select, button {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font: inherit;
+    }
+    button {
+      margin-top: 6px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #fff;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .status {
+      margin-top: 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      background: #fbfdff;
+    }
+    .kpi {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .kpi > div {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      background: #fff;
+    }
+    .kpi .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .kpi .value { font-size: 28px; font-weight: 700; }
+    .error { color: #b91c1c; font-weight: 600; }
+    @media (max-width: 700px) {
+      .grid, .kpi { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>LabelAny3D 웹 데모</h1>
+      <p>이미지를 업로드하면 3D 파이프라인을 실행하고, 최종적으로 총 부피와 추천 트럭 톤수를 보여줍니다.</p>
+
+      <form id="jobForm">
+        <label for="image">이미지 업로드</label>
+        <input id="image" name="image" type="file" accept=".jpg,.jpeg,.png,.webp" required />
+
+        <div class="grid">
+          <div>
+            <label for="gpu_idx">GPU 인덱스</label>
+            <input id="gpu_idx" name="gpu_idx" type="number" min="0" value="0" />
+          </div>
+          <div>
+            <label for="obj_rec">재구성 모델</label>
+            <select id="obj_rec" name="obj_rec">
+              <option value="amodal3r" selected>amodal3r</option>
+              <option value="trellis">trellis</option>
+              <option value="hunyuan3d">hunyuan3d</option>
+              <option value="dreamgaussian">dreamgaussian</option>
+            </select>
+          </div>
+          <div>
+            <label for="one_ton_capacity_m3">1톤 기준 적재용적 (m³)</label>
+            <input id="one_ton_capacity_m3" name="one_ton_capacity_m3" type="number" step="0.1" min="0.1" value="6.0" />
+          </div>
+          <div>
+            <label for="fill_rate">적재율 (0~1)</label>
+            <input id="fill_rate" name="fill_rate" type="number" step="0.05" min="0.1" max="1" value="0.6" />
+          </div>
+        </div>
+
+        <button id="submitBtn" type="submit">분석 시작</button>
+      </form>
+
+      <div class="status" id="statusBox">
+        상태: 대기 중
+      </div>
+      <div class="kpi" id="resultBox" style="display:none;">
+        <div>
+          <div class="label">총 부피</div>
+          <div class="value" id="totalVolume">-</div>
+        </div>
+        <div>
+          <div class="label">추천 트럭</div>
+          <div class="value" id="truckTon">-</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById("jobForm");
+    const statusBox = document.getElementById("statusBox");
+    const resultBox = document.getElementById("resultBox");
+    const totalVolume = document.getElementById("totalVolume");
+    const truckTon = document.getElementById("truckTon");
+    const submitBtn = document.getElementById("submitBtn");
+
+    let timer = null;
+
+    function setStatus(text, isError = false) {
+      statusBox.textContent = `상태: ${text}`;
+      statusBox.className = isError ? "status error" : "status";
+    }
+
+    async function fetchJson(url, options = {}) {
+      const res = await fetch(url, options);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.detail || `HTTP ${res.status}`);
+      }
+      return data;
+    }
+
+    async function poll(jobId) {
+      const state = await fetchJson(`/api/jobs/${jobId}`);
+      setStatus(`${state.status} / ${state.stage || "-"}`);
+
+      if (state.status === "failed") {
+        clearInterval(timer);
+        submitBtn.disabled = false;
+        setStatus(`실패: ${state.error || "unknown error"}`, true);
+        return;
+      }
+      if (state.status !== "done") {
+        return;
+      }
+
+      clearInterval(timer);
+      const result = await fetchJson(`/api/jobs/${jobId}/result`);
+      resultBox.style.display = "grid";
+      totalVolume.textContent = `${result.total_volume_m3.toFixed(2)} m³`;
+
+      if (result.recommended_truck_ton !== null) {
+        truckTon.textContent = `${result.recommended_truck_ton} 톤`;
+      } else {
+        const n = result.min_10t_trucks_needed || 1;
+        truckTon.textContent = `10톤 이상 / 10톤 ${n}대`;
+      }
+
+      setStatus(`완료 (job_id: ${jobId})`);
+      submitBtn.disabled = false;
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      resultBox.style.display = "none";
+      submitBtn.disabled = true;
+
+      const formData = new FormData(form);
+      formData.set("use_yolo_seg", "1");
+
+      try {
+        setStatus("업로드 중...");
+        const created = await fetchJson("/api/jobs", {
+          method: "POST",
+          body: formData,
+        });
+        const jobId = created.job_id;
+        setStatus(`대기열 등록 완료 (${jobId})`);
+
+        if (timer) clearInterval(timer);
+        timer = setInterval(() => {
+          poll(jobId).catch((err) => {
+            clearInterval(timer);
+            submitBtn.disabled = false;
+            setStatus(`오류: ${err.message}`, true);
+          });
+        }, 2500);
+      } catch (err) {
+        submitBtn.disabled = false;
+        setStatus(`오류: ${err.message}`, true);
+      }
+    });
+  </script>
+</body>
+</html>
