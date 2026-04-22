@@ -10,7 +10,7 @@ import uuid
 from pathlib import Path
 from typing import Dict, Optional
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
@@ -98,7 +98,10 @@ def _extract_stage(line: str) -> Optional[str]:
     return None
 
 
-def _compute_summary(bbox_path: Path, one_ton_capacity_m3: float, fill_rate: float) -> dict:
+def _compute_summary(bbox_path: Path, one_ton_capacity_m3: float, fill_rate: float,
+                     from_elevator: bool = True, from_floor: int = 1,
+                     to_elevator: bool = True, to_floor: int = 1,
+                     distance_km: float = 10.0) -> dict:
     bboxes = json.loads(bbox_path.read_text(encoding="utf-8"))
     total_volume = 0.0
     for obj in bboxes:
@@ -120,11 +123,56 @@ def _compute_summary(bbox_path: Path, one_ton_capacity_m3: float, fill_rate: flo
         effective_10t = one_ton_capacity_m3 * 10 * fill_rate
         fallback = math.ceil(total_volume / effective_10t) if effective_10t > 0 else None
 
+    # 인력 추정 (부피 기준)
+    if total_volume <= 10:
+        workers = 2
+    elif total_volume <= 20:
+        workers = 3
+    elif total_volume <= 35:
+        workers = 4
+    else:
+        workers = 5
+
+    # 추가비용 계산
+    extra_costs = []
+    # 톤수별 기본 비용 (포장이사 기준)
+    base_price_map = {
+        1: 350000, 2: 500000, 3: 700000, 4: 900000,
+        5: 1300000, 6: 1500000, 7: 1700000, 8: 1900000,
+        9: 2100000, 10: 2300000
+    }
+    ton = recommended_ton or 10
+    base_price = base_price_map.get(ton, ton * 200000)  # 톤당 10만원 기준
+
+    if not from_elevator and from_floor > 1:
+        surcharge = (from_floor - 1) * 30000 * workers
+        extra_costs.append({"item": f"출발지 계단 할증 ({from_floor}층, 엘리베이터 없음)", "amount": surcharge})
+    if not to_elevator and to_floor > 1:
+        surcharge = (to_floor - 1) * 30000 * workers
+        extra_costs.append({"item": f"도착지 계단 할증 ({to_floor}층, 엘리베이터 없음)", "amount": surcharge})
+    needs_ladder_truck = (not from_elevator and from_floor >= 4) or (not to_elevator and to_floor >= 4)
+    if needs_ladder_truck:
+        extra_costs.append({"item": "사다리차 비용", "amount": 300000})
+
+    # 이사 거리 할증
+    if distance_km > 30:
+        dist_surcharge = int((distance_km - 30) / 10) * 50000
+        extra_costs.append({"item": f"장거리 할증 ({int(distance_km)}km)", "amount": dist_surcharge})
+
+    total_extra = sum(c["amount"] for c in extra_costs)
+    total_price = base_price + total_extra
+
     return {
         "total_volume_m3": round(total_volume, 4),
         "recommended_truck_ton": recommended_ton,
         "requires_over_10t_or_multi_trucks": recommended_ton is None,
         "min_10t_trucks_needed": fallback,
+        "estimated_workers": workers,
+        "base_price": base_price,
+        "extra_costs": extra_costs,
+        "total_extra_cost": total_extra,
+        "total_estimated_price": total_price,
+        "needs_ladder_truck": needs_ladder_truck,
     }
 
 
@@ -191,19 +239,34 @@ def _run_pipeline(job_id: str) -> None:
         )
         return
 
-    summary = _compute_summary(
-        bbox_path=bbox_path,
-        one_ton_capacity_m3=float(job["one_ton_capacity_m3"]),
-        fill_rate=float(job["fill_rate"]),
-    )
-    _update_job(
-        job_id,
-        status="done",
-        stage="done",
-        elapsed_sec=elapsed,
-        result=summary,
-        result_bbox_path=str(bbox_path),
-    )
+    try:
+        summary = _compute_summary(
+            bbox_path=bbox_path,
+            one_ton_capacity_m3=float(job["one_ton_capacity_m3"]),
+            fill_rate=float(job["fill_rate"]),
+            from_elevator=job.get("from_elevator", True) in [True, "true", "True", 1],
+            from_floor=int(job.get("from_floor", 1)),
+            to_elevator=job.get("to_elevator", True) in [True, "true", "True", 1],
+            to_floor=int(job.get("to_floor", 1)),
+            distance_km=float(job.get("distance_km", 10.0)),
+        )
+    except Exception as e:
+        import traceback
+        _update_job(job_id, status="failed", stage="failed",
+                    error=f"Summary computation failed: {e}\n{traceback.format_exc()}",
+                    elapsed_sec=elapsed)
+        return
+
+    import time as _time
+    job["status"] = "done"
+    job["stage"] = "done"
+    job["elapsed_sec"] = elapsed
+    job["result"] = summary
+    job["result_bbox_path"] = str(bbox_path)
+    job["updated_at"] = _time.time()
+    _job_path(job_id).write_text(json.dumps(job, indent=2), encoding="utf-8")
+    with _jobs_lock:
+        _jobs[job_id] = job
 
 
 app = FastAPI(title="LabelAny3D Demo API")
@@ -222,10 +285,16 @@ def root():
 @app.post("/api/jobs")
 async def create_job(
     image: UploadFile = File(...),
+    from_elevator: str = Form("true"),
+    from_floor: int = Form(1),
+    to_elevator: str = Form("true"),
+    to_floor: int = Form(1),
+    distance_km: float = Form(10.0),
 ):
     if not PIPELINE_SCRIPT.exists():
         raise HTTPException(status_code=500, detail="Pipeline script not found.")
 
+    print(f"[DEBUG] from_elevator={from_elevator}, from_floor={from_floor}, to_elevator={to_elevator}, to_floor={to_floor}, distance_km={distance_km}")
     ext = Path(image.filename or "").suffix.lower()
     if ext not in ALLOWED_EXT:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
@@ -254,6 +323,11 @@ async def create_job(
         "use_yolo_seg": DEFAULT_USE_YOLO_SEG,
         "one_ton_capacity_m3": DEFAULT_ONE_TON_CAPACITY_M3,
         "fill_rate": DEFAULT_FILL_RATE,
+        "from_elevator": from_elevator.lower() == "true",
+        "from_floor": from_floor,
+        "to_elevator": to_elevator.lower() == "true",
+        "to_floor": to_floor,
+        "distance_km": distance_km,
     }
     _save_job(job)
 
@@ -293,6 +367,12 @@ def get_job_result(job_id: str):
         "recommended_truck_ton": job["result"]["recommended_truck_ton"],
         "requires_over_10t_or_multi_trucks": job["result"]["requires_over_10t_or_multi_trucks"],
         "min_10t_trucks_needed": job["result"]["min_10t_trucks_needed"],
+        "estimated_workers": job["result"]["estimated_workers"],
+        "base_price": job["result"]["base_price"],
+        "extra_costs": job["result"]["extra_costs"],
+        "total_extra_cost": job["result"]["total_extra_cost"],
+        "total_estimated_price": job["result"]["total_estimated_price"],
+        "needs_ladder_truck": job["result"]["needs_ladder_truck"],
     }
 
 

@@ -440,15 +440,60 @@ body { font-family: 'Noto Sans KR', sans-serif; background: #f0f4f8; color: #1a1
       <div class="hero-title">방을 촬영하고 자동으로<br/>이사 견적을 받아보세요</div>
       <div class="hero-desc">스마트폰으로 실내를 촬영하면 AI가 자동으로 짐의 부피를 측정하고<br/>최적의 이사 견적을 제공합니다.</div>
       <div class="hero-buttons">
-        <button id="scanBtn" class="btn-hero primary" type="button">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="18" rx="2"/><circle cx="12" cy="13" r="4"/><circle cx="12" cy="13" r="1.5"/></svg>
-          촬영 시작
-        </button>
         <button id="uploadBtn" class="btn-hero secondary" type="button">
           <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          사진 업로드
+          사진 선택
+        </button>
+        <button id="startBtn" class="btn-hero primary" type="button" disabled style="opacity:0.5;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          견적 시작
         </button>
         <input id="imageInput" type="file" accept=".jpg,.jpeg,.png,.webp" style="display:none;" />
+        <div id="previewWrap" style="display:none; margin-top:12px; align-items:center; gap:12px;">
+          <img id="previewImg" style="width:80px; height:60px; object-fit:cover; border-radius:10px; border:2px solid rgba(255,255,255,0.4);" />
+          <span id="previewName" style="font-size:13px; opacity:0.9;"></span>
+        </div>
+      </div>
+      <div style="margin-top:20px; display:flex; gap:16px; flex-wrap:wrap;">
+        <div style="display:flex; flex-direction:column; gap:8px; background:rgba(255,255,255,0.1); padding:12px; border-radius:12px;">
+          <span style="font-size:12px; opacity:0.85; font-weight:600;">📦 출발지</span>
+          <div style="display:flex; gap:8px;">
+            <div style="display:flex; flex-direction:column; gap:4px;">
+              <label style="font-size:11px; opacity:0.75;">엘리베이터</label>
+              <select id="fromElevator" style="padding:7px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.3); background:rgba(255,255,255,0.18); color:white; font-family:inherit; font-size:12px;">
+                <option value="true">있음</option>
+                <option value="false">없음</option>
+              </select>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:4px;">
+              <label style="font-size:11px; opacity:0.75;">층수</label>
+              <input id="fromFloor" type="number" min="1" max="50" value="1" style="padding:7px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.3); background:rgba(255,255,255,0.18); color:white; font-family:inherit; font-size:12px; width:70px;" />
+            </div>
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px; background:rgba(255,255,255,0.1); padding:12px; border-radius:12px;">
+          <span style="font-size:12px; opacity:0.85; font-weight:600;">🏠 도착지</span>
+          <div style="display:flex; gap:8px;">
+            <div style="display:flex; flex-direction:column; gap:4px;">
+              <label style="font-size:11px; opacity:0.75;">엘리베이터</label>
+              <select id="toElevator" style="padding:7px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.3); background:rgba(255,255,255,0.18); color:white; font-family:inherit; font-size:12px;">
+                <option value="true">있음</option>
+                <option value="false">없음</option>
+              </select>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:4px;">
+              <label style="font-size:11px; opacity:0.75;">층수</label>
+              <input id="toFloor" type="number" min="1" max="50" value="1" style="padding:7px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.3); background:rgba(255,255,255,0.18); color:white; font-family:inherit; font-size:12px; width:70px;" />
+            </div>
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px; background:rgba(255,255,255,0.1); padding:12px; border-radius:12px;">
+          <span style="font-size:12px; opacity:0.85; font-weight:600;">🚛 이사 거리</span>
+          <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
+            <label style="font-size:11px; opacity:0.75;">거리 (km)</label>
+            <input id="distanceInput" type="number" min="1" value="10" style="padding:7px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.3); background:rgba(255,255,255,0.18); color:white; font-family:inherit; font-size:12px; width:90px;" />
+          </div>
+        </div>
       </div>
     </div>
     <div class="hero-right">
@@ -522,6 +567,14 @@ body { font-family: 'Noto Sans KR', sans-serif; background: #f0f4f8; color: #1a1
             <div class="stat-value" id="elapsedSec">-</div>
             <div class="stat-label">처리 시간(초)</div>
           </div>
+          <div class="stat-card">
+            <div class="stat-value" id="workersValue">-</div>
+            <div class="stat-label">예상 인력(명)</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="totalPriceValue">-</div>
+            <div class="stat-label">예상 총 비용</div>
+          </div>
         </div>
 
         <div class="estimate-section-title">
@@ -561,6 +614,28 @@ body { font-family: 'Noto Sans KR', sans-serif; background: #f0f4f8; color: #1a1
           <div class="volume-bar"><div class="volume-fill" style="width: 100%; opacity: 0.25;"></div></div>
         </div>
 
+        <div id="extraCostsSection" style="display:none; margin-bottom:16px;">
+          <div class="estimate-section-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            추가 비용 내역
+          </div>
+          <div id="extraCostsList"></div>
+          <div class="volume-row" style="margin-top:8px; border-top:1px solid #e8ecf2; padding-top:8px;">
+            <span class="volume-label" style="font-weight:600;">기본 비용</span>
+            <span class="volume-value" id="basePriceValue">-</span>
+          </div>
+          <div class="volume-row">
+            <span class="volume-label" style="font-weight:600; color:#d97706;">추가 비용 합계</span>
+            <span class="volume-value" id="extraTotalValue" style="color:#d97706;">-</span>
+          </div>
+          <div class="volume-row" style="border-top:2px solid #e8ecf2; padding-top:8px; margin-top:4px;">
+            <span class="volume-label" style="font-weight:700; font-size:14px;">총 예상 비용</span>
+            <span class="volume-value" style="font-size:16px;" id="grandTotalValue">-</span>
+          </div>
+          <div id="ladderTruckAlert" style="display:none; margin-top:12px; padding:10px 14px; background:#fff8e6; border-radius:10px; border:1px solid #fcd34d; font-size:12px; color:#92400e;">
+            ⚠️ 사다리차가 필요합니다 (엘리베이터 없음, 4층 이상)
+          </div>
+        </div>
         <button id="logBtn" class="btn-download" type="button">실행 로그 보기</button>
       </div>
     </div>
@@ -625,6 +700,11 @@ async function fetchJson(url, options = {}) {
 async function startJob(file) {
   const form = new FormData();
   form.append('image', file);
+  form.append('from_elevator', document.getElementById('fromElevator').value);
+  form.append('from_floor', document.getElementById('fromFloor').value);
+  form.append('to_elevator', document.getElementById('toElevator').value);
+  form.append('to_floor', document.getElementById('toFloor').value);
+  form.append('distance_km', document.getElementById('distanceInput').value);
   const data = await fetchJson('/api/jobs', { method: 'POST', body: form });
   currentJobId = data.job_id;
   setStatus(`업로드 완료. 분석 시작 (${currentJobId})`);
@@ -677,6 +757,32 @@ async function pollJob() {
       truckNameEl.textContent = '10톤 이상';
       truckCountEl.textContent = `${n}대 필요`;
     }
+    // 인력
+    const workersEl = document.getElementById('workersValue');
+    if (workersEl) workersEl.textContent = result.estimated_workers || '-';
+
+    // 비용
+    const basePriceEl = document.getElementById('basePriceValue');
+    const extraTotalEl = document.getElementById('extraTotalValue');
+    const grandTotalEl = document.getElementById('grandTotalValue');
+    const totalPriceEl = document.getElementById('totalPriceValue');
+    const extraSection = document.getElementById('extraCostsSection');
+    const extraList = document.getElementById('extraCostsList');
+    const ladderAlert = document.getElementById('ladderTruckAlert');
+
+    if (basePriceEl) basePriceEl.textContent = `${(result.base_price||0).toLocaleString()}원`;
+    if (extraTotalEl) extraTotalEl.textContent = `+${(result.total_extra_cost||0).toLocaleString()}원`;
+    if (grandTotalEl) grandTotalEl.textContent = `${(result.total_estimated_price||0).toLocaleString()}원`;
+    if (totalPriceEl) totalPriceEl.textContent = `${Math.round((result.total_estimated_price||0)/10000)}만원`;
+
+    if (extraSection) extraSection.style.display = 'block';
+    if (extraList && result.extra_costs) {
+      extraList.innerHTML = result.extra_costs.map(c =>
+        `<div class="volume-row"><span class="volume-label">${c.item}</span><span class="volume-value" style="color:#d97706;">+${c.amount.toLocaleString()}원</span></div>`
+      ).join('') || '<div style="font-size:12px; color:#8896ab; text-align:center; padding:8px;">추가 비용 없음</div>';
+    }
+    if (ladderAlert) ladderAlert.style.display = result.needs_ladder_truck ? 'block' : 'none';
+
     setStatus('분석이 완료되었습니다.');
   } catch (err) {
     clearInterval(pollTimer);
@@ -685,18 +791,47 @@ async function pollJob() {
   }
 }
 
+let selectedFile = null;
+
 uploadBtn.addEventListener('click', () => imageInput.click());
-scanBtn.addEventListener('click', () => imageInput.click());
-imageInput.addEventListener('change', async (e) => {
+imageInput.addEventListener('change', (e) => {
   const file = e.target.files && e.target.files[0];
   if (!file) return;
+  selectedFile = file;
+
+  // 미리보기
+  const previewWrap = document.getElementById('previewWrap');
+  const previewImg = document.getElementById('previewImg');
+  const previewName = document.getElementById('previewName');
+  const startBtn = document.getElementById('startBtn');
+
+  const reader = new FileReader();
+  reader.onload = (ev) => { previewImg.src = ev.target.result; };
+  reader.readAsDataURL(file);
+  previewName.textContent = file.name;
+  previewWrap.style.display = 'flex';
+
+  startBtn.disabled = false;
+  startBtn.style.opacity = '1';
+  setStatus('사진이 선택되었습니다. 견적 시작 버튼을 눌러주세요.');
+  imageInput.value = '';
+});
+
+document.getElementById('startBtn').addEventListener('click', async () => {
+  if (!selectedFile) {
+    setStatus('먼저 사진을 선택해주세요.', true);
+    return;
+  }
   setStatus('이미지 업로드 중...');
+  const startBtn = document.getElementById('startBtn');
+  startBtn.disabled = true;
+  startBtn.style.opacity = '0.5';
   try {
-    await startJob(file);
+    await startJob(selectedFile);
   } catch (err) {
     setStatus(`업로드 실패: ${err.message}`, true);
-  } finally {
-    imageInput.value = '';
+    startBtn.disabled = false;
+    startBtn.style.opacity = '1';
   }
 });
 
