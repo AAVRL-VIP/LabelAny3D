@@ -12,7 +12,7 @@ set -euo pipefail
 # Usage:
 #   bash run_single_full_pipeline_parallel.sh /abs/path/image.jpg
 # Optional env:
-#   GPU_IDX=0 OBJ_REC=trellis MIN_MASK_AREA=6400
+#   GPU_IDX=0 OBJ_REC=trellis MIN_MASK_AREA=6400 USE_YOLO_SEG=1 YOLO_SEG_MODEL=yoloe-26l-seg.pt
 
 if [[ $# -lt 1 ]]; then
   echo "Usage: bash run_single_full_pipeline_parallel.sh /abs/path/image.jpg"
@@ -25,6 +25,13 @@ OBJ_REC="${OBJ_REC:-amodal3r}"
 MIN_MASK_AREA="${MIN_MASK_AREA:-6400}"
 SKIP_SEG="${SKIP_SEG:-0}"
 KEEP_LABELS="${KEEP_LABELS:-}"
+USE_YOLO_SEG="${USE_YOLO_SEG:-0}"
+YOLO_SEG_MODEL="${YOLO_SEG_MODEL:-yoloe-26l-seg.pt}"
+YOLO_CONF="${YOLO_CONF:-0.20}"
+YOLO_IOU="${YOLO_IOU:-0.70}"
+YOLO_MAX_DET="${YOLO_MAX_DET:-300}"
+YOLO_CLASSES="${YOLO_CLASSES:-}"
+YOLO_CLASS_PRESET="${YOLO_CLASS_PRESET:-indoor}"
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -44,13 +51,43 @@ RESULT_SCENE_DIR="$RESULT_ROOT/val/$SCENE_NAME"
 SEG_JSON="${SEG_JSON:-$COCO_VAL_JSON}"
 
 mkdir -p "$COCO_IMG_DIR" "$COCO_ANN_DIR" "$RESULT_SCENE_DIR"
-cp -f "$IMAGE_PATH" "$COCO_IMG_DIR/$IMG_NAME"
-cp -f "$IMAGE_PATH" "$RESULT_SCENE_DIR/input.png"
 
 export IMAGE_PATH
+export COCO_DST="$COCO_IMG_DIR/$IMG_NAME"
+export INPUT_DST="$RESULT_SCENE_DIR/input.png"
 export MIN_MASK_AREA
 export RESULT_SCENE_DIR
 export KEEP_LABELS
+export USE_YOLO_SEG
+export YOLO_SEG_MODEL
+export YOLO_CONF
+export YOLO_IOU
+export YOLO_MAX_DET
+export YOLO_CLASSES
+export YOLO_CLASS_PRESET
+
+python - <<'PY'
+from PIL import Image, ImageOps
+import os
+
+src = os.environ["IMAGE_PATH"]
+coco_dst = os.environ["COCO_DST"]
+input_dst = os.environ["INPUT_DST"]
+
+img = Image.open(src)
+img = ImageOps.exif_transpose(img).convert("RGB")
+
+# COCO image path: keep original filename/extension
+img.save(coco_dst)
+
+# Unified pipeline input: always save normalized PNG
+img.save(input_dst)
+
+print(f"Saved normalized image to: {coco_dst}")
+print(f"Saved normalized image to: {input_dst}")
+print(f"Normalized image size: {img.size}")
+PY
+
 cd "$REPO/src"
 
 LOG_DIR="$RESULT_SCENE_DIR/logs"
@@ -104,10 +141,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 import rembg
-from PIL import Image
+from PIL import Image, ImageOps
 from pycocotools import mask as mask_utils
 
-from model_wrappers import run_entityv2, run_clipseg, run_ovsam
+from model_wrappers import run_entityv2, run_clipseg, run_ovsam, run_yolo_seg
 
 repo = Path.cwd().parent
 image_path = Path(os.environ["IMAGE_PATH"]).resolve()
@@ -115,10 +152,41 @@ img_name = image_path.name
 min_mask_area = int(os.environ.get("MIN_MASK_AREA", "6400"))
 keep_labels_raw = os.environ.get("KEEP_LABELS", "")
 keep_labels = {x.strip().lower() for x in keep_labels_raw.split(",") if x.strip()}
+use_yolo_seg = os.environ.get("USE_YOLO_SEG", "0") == "1"
+yolo_model = os.environ.get("YOLO_SEG_MODEL", "yoloe-26l-seg.pt")
+yolo_conf = float(os.environ.get("YOLO_CONF", "0.20"))
+yolo_iou = float(os.environ.get("YOLO_IOU", "0.70"))
+yolo_max_det = int(os.environ.get("YOLO_MAX_DET", "300"))
+yolo_classes_raw = os.environ.get("YOLO_CLASSES", "")
+yolo_classes = [x.strip() for x in yolo_classes_raw.split(",") if x.strip()]
+yolo_class_preset = os.environ.get("YOLO_CLASS_PRESET", "indoor").strip().lower()
+
+if not yolo_classes and yolo_class_preset == "indoor":
+    yolo_classes = [
+        "chair", "table", "sofa", "bed", "desk", "lamp",
+        "cabinet", "shelf", "drawer", "tv", "monitor",
+        "refrigerator", "microwave", "washing machine",
+        "oven", "sink", "bathtub", "bench",
+        "blanket", "curtain", "fan", "storage_box", "box",
+        "air conditioner", "trash can", "cooker", "toaster"
+    ]
 furniture_keywords = {
-    "furniture", "chair", "table", "desk", "sofa", "couch", "bed", "cabinet",
-    "drawer", "shelf", "bookshelf", "bookcase", "wardrobe", "dresser",
-    "stool", "bench", "nightstand", "tv stand", "cupboard"
+    # 소파/의자류
+    "furniture", "sofa", "couch", "chair", "stool", "bench",
+    "ottoman", "futon", "recliner", "loveseat",
+    # 테이블/책상류
+    "table", "desk",
+    # 수납류
+    "cabinet", "drawer", "shelf", "bookcase", "wardrobe",
+    "dresser", "cupboard", "locker",
+    # 침실류
+    "bed", "mattress", "crib",
+    # 가전류
+    "refrigerator", "washer", "dryer", "dishwasher",
+    "microwave", "oven", "stove", "television", "monitor",
+    "air_conditioner", "vacuum",
+    # 기타
+    "piano", "ironing_board",
 }
 
 result_scene_dir = Path(os.environ["RESULT_SCENE_DIR"]).resolve()
@@ -126,28 +194,45 @@ seg_dir = result_scene_dir / "segmentation"
 seg_dir.mkdir(parents=True, exist_ok=True)
 
 ann_path = repo / "dataset" / "coco" / "annotations" / "coconut_val.json"
-img = Image.open(image_path).convert("RGB")
+img = ImageOps.exif_transpose(Image.open(image_path)).convert("RGB")
 img_np = np.array(img)
 H, W = img_np.shape[:2]
 
 masks = []
 labels = []
 
-try:
-    seg_masks = run_entityv2(img_np, threshold=0.1, max_size=1500)
-    if len(seg_masks) > 0:
-        fg_idx, _ = run_clipseg(img, seg_masks)
-        if len(fg_idx) > 0:
-            masks = [seg_masks[i] for i in fg_idx]
-            try:
-                labels = run_ovsam(img, np.array(masks).astype(np.uint8) * 255)
-            except Exception as e:
-                print(f"OVSAM failed, falling back to generic labels: {e}")
-                labels = ["object"] * len(masks)
-except Exception as e:
-    print(f"EntityV2/CLIPSeg pipeline failed, switching to rembg fallback: {e}")
-    masks = []
-    labels = []
+if use_yolo_seg:
+    try:
+        masks, labels = run_yolo_seg(
+            img_np,
+            model_path=yolo_model,
+            conf=yolo_conf,
+            iou=yolo_iou,
+            classes=yolo_classes if yolo_classes else None,
+            max_det=yolo_max_det,
+        )
+        print(f"YOLO segmentation produced {len(masks)} masks (model={yolo_model}, classes={len(yolo_classes) if yolo_classes else 'all'})")
+    except Exception as e:
+        print(f"YOLO segmentation failed, switching to EntityV2 pipeline: {e}")
+        masks = []
+        labels = []
+
+if len(masks) == 0:
+    try:
+        seg_masks = run_entityv2(img_np, threshold=0.1, max_size=1500)
+        if len(seg_masks) > 0:
+            fg_idx, _ = run_clipseg(img, seg_masks)
+            if len(fg_idx) > 0:
+                masks = [seg_masks[i] for i in fg_idx]
+                try:
+                    labels = run_ovsam(img, np.array(masks).astype(np.uint8) * 255)
+                except Exception as e:
+                    print(f"OVSAM failed, falling back to generic labels: {e}")
+                    labels = ["object"] * len(masks)
+    except Exception as e:
+        print(f"EntityV2/CLIPSeg pipeline failed, switching to rembg fallback: {e}")
+        masks = []
+        labels = []
 
 if len(masks) == 0:
     rgba = np.array(rembg.remove(img, rembg.new_session("isnet-general-use")))
@@ -425,7 +510,7 @@ echo "Result: $RESULT_SCENE_DIR/3dbbox.json"
 
 echo "=== 부피 계산 ==="
 if [ -f "$RESULT_SCENE_DIR/3dbbox.json" ]; then
-    python3 /workspace/LabelAny3D/src/calc_volume.py "$RESULT_SCENE_DIR/3dbbox.json"
+    python3 "$REPO/src/calc_volume.py" "$RESULT_SCENE_DIR/3dbbox.json"
 else
     echo "감지된 가구가 없어 부피 계산을 건너뜁니다."
 fi

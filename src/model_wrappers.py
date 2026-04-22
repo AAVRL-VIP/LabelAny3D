@@ -675,6 +675,78 @@ def run_entityv2(image, threshold=0.1, max_size=1500):
 
 
 # =============================================================================
+# YOLO - Instance Segmentation (in-the-wild mode)
+# =============================================================================
+def run_yolo_seg(image, model_path="yoloe-26l-seg.pt", conf=0.2, iou=0.7, classes=None, device=None, max_det=300):
+    """
+    Run YOLO segmentation model and return instance masks + labels.
+
+    Args:
+        image: Input image as numpy array (RGB)
+        model_path: YOLO segmentation checkpoint path/name
+        conf: Confidence threshold
+        iou: NMS IoU threshold
+        classes: Optional class name whitelist for open-vocabulary models
+        device: Optional inference device string (e.g., "0", "cpu")
+        max_det: Maximum number of detections
+
+    Returns:
+        Tuple of (masks, labels)
+          - masks: bool numpy array with shape [N, H, W]
+          - labels: list[str] length N
+    """
+    from ultralytics import YOLO
+    import cv2
+
+    model_key = f"yolo_seg::{model_path}"
+    if model_key not in _loaded_models:
+        _loaded_models[model_key] = YOLO(model_path)
+        print(f"YOLO segmentation model loaded: {model_path}")
+    model = _loaded_models[model_key]
+
+    if classes:
+        try:
+            model.set_classes(classes)
+        except Exception as e:
+            print(f"YOLO set_classes skipped: {e}")
+
+    pred_kwargs = {
+        "source": image,
+        "conf": float(conf),
+        "iou": float(iou),
+        "max_det": int(max_det),
+        "verbose": False,
+    }
+    if device is not None and str(device).strip():
+        pred_kwargs["device"] = str(device)
+
+    results = model.predict(**pred_kwargs)
+    if len(results) == 0 or results[0].masks is None or results[0].boxes is None:
+        return np.zeros((0, image.shape[0], image.shape[1]), dtype=bool), []
+
+    h, w = image.shape[:2]
+    raw_masks = results[0].masks.data.detach().cpu().numpy()
+    if raw_masks.ndim == 2:
+        raw_masks = raw_masks[None, ...]
+
+    # Some YOLO variants return masks at model resolution (e.g., 640x640).
+    # Resize to original image resolution for downstream indexing/cropping.
+    if raw_masks.shape[-2:] != (h, w):
+        resized_masks = []
+        for m in raw_masks:
+            m_resized = cv2.resize(m.astype(np.float32), (w, h), interpolation=cv2.INTER_NEAREST)
+            resized_masks.append(m_resized > 0.5)
+        masks = np.stack(resized_masks, axis=0) if len(resized_masks) else np.zeros((0, h, w), dtype=bool)
+    else:
+        masks = raw_masks > 0.5
+
+    cls_ids = results[0].boxes.cls.detach().cpu().numpy().astype(int).tolist()
+    name_map = results[0].names if hasattr(results[0], "names") else {}
+    labels = [str(name_map.get(c, f"class_{c}")) for c in cls_ids]
+    return masks, labels
+
+
+# =============================================================================
 # CLIPSeg - Background/Foreground Classification (in-the-wild mode)
 # =============================================================================
 def run_clipseg(image, masks):

@@ -190,6 +190,30 @@ if __name__ == "__main__":
         prediction = depthpro_model.infer(img, f_px=K_img[0, 0])
         pro_depth_map = prediction["depth"].cpu().numpy()
 
+        print("moge_depth_map shape:", moge_depth_map.shape)
+        print("pro_depth_map shape :", pro_depth_map.shape)
+        print("moge_mask shape     :", None if moge_mask is None else moge_mask.shape)
+
+        # Shape/orientation fix
+        if moge_depth_map.shape != pro_depth_map.shape:
+            if moge_depth_map.shape == pro_depth_map.T.shape:
+                print("[fix] transposing pro_depth_map")
+                pro_depth_map = pro_depth_map.T
+            elif moge_depth_map.T.shape == pro_depth_map.shape:
+                print("[fix] transposing moge_depth_map")
+                moge_depth_map = moge_depth_map.T
+                if moge_mask is not None and moge_mask.shape != moge_depth_map.shape:
+                    if moge_mask.T.shape == moge_depth_map.shape:
+                        print("[fix] transposing moge_mask")
+                        moge_mask = moge_mask.T
+            else:
+                raise ValueError(
+                    f"Unresolved shape mismatch: "
+                    f"moge={moge_depth_map.shape}, "
+                    f"pro={pro_depth_map.shape}, "
+                    f"mask={None if moge_mask is None else moge_mask.shape}"
+                )
+
         depth_map = align_depth(moge_depth_map, pro_depth_map, mask=moge_mask)
         pts3d = depth_to_points(depth_map[None], K_img)
 
