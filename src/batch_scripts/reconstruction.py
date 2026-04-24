@@ -11,6 +11,17 @@ from dataset_model import get_scene
 from pathlib import Path
 from model_wrappers import infer_with_trellis, infer_with_hunyuan, infer_with_amodal3r
 from batch_scripts.coconut_loader import CoconutLoader, get_dataset_paths
+import random
+import numpy as np
+seed = 7
+
+random.seed(seed)
+np.random.seed(seed)
+torch.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)
+
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 
 def reconstruct_object(run_opt, out_dir, obj_id):

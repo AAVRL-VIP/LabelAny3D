@@ -27,8 +27,8 @@ SKIP_SEG="${SKIP_SEG:-0}"
 KEEP_LABELS="${KEEP_LABELS:-}"
 USE_YOLO_SEG="${USE_YOLO_SEG:-0}"
 YOLO_SEG_MODEL="${YOLO_SEG_MODEL:-yoloe-26l-seg.pt}"
-YOLO_CONF="${YOLO_CONF:-0.20}"
-YOLO_IOU="${YOLO_IOU:-0.70}"
+YOLO_CONF="${YOLO_CONF:-0.45}"
+YOLO_IOU="${YOLO_IOU:-0.55}"
 YOLO_MAX_DET="${YOLO_MAX_DET:-300}"
 YOLO_CLASSES="${YOLO_CLASSES:-}"
 YOLO_CLASS_PRESET="${YOLO_CLASS_PRESET:-indoor}"
@@ -146,6 +146,18 @@ from pycocotools import mask as mask_utils
 
 from model_wrappers import run_entityv2, run_clipseg, run_ovsam, run_yolo_seg
 
+import random
+import torch
+
+seed = 7
+random.seed(seed)
+np.random.seed(seed)
+torch.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+
 repo = Path.cwd().parent
 image_path = Path(os.environ["IMAGE_PATH"]).resolve()
 img_name = image_path.name
@@ -154,8 +166,8 @@ keep_labels_raw = os.environ.get("KEEP_LABELS", "")
 keep_labels = {x.strip().lower() for x in keep_labels_raw.split(",") if x.strip()}
 use_yolo_seg = os.environ.get("USE_YOLO_SEG", "0") == "1"
 yolo_model = os.environ.get("YOLO_SEG_MODEL", "yoloe-26l-seg.pt")
-yolo_conf = float(os.environ.get("YOLO_CONF", "0.20"))
-yolo_iou = float(os.environ.get("YOLO_IOU", "0.70"))
+yolo_conf = float(os.environ.get("YOLO_CONF", "0.45"))
+yolo_iou = float(os.environ.get("YOLO_IOU", "0.55"))
 yolo_max_det = int(os.environ.get("YOLO_MAX_DET", "300"))
 yolo_classes_raw = os.environ.get("YOLO_CLASSES", "")
 yolo_classes = [x.strip() for x in yolo_classes_raw.split(",") if x.strip()]
@@ -163,12 +175,12 @@ yolo_class_preset = os.environ.get("YOLO_CLASS_PRESET", "indoor").strip().lower(
 
 if not yolo_classes and yolo_class_preset == "indoor":
     yolo_classes = [
-        "chair", "table", "sofa", "bed", "desk", "lamp",
+        "chair", "table", "sofa", "bed", "desk",
         "cabinet", "shelf", "drawer", "tv", "monitor",
         "refrigerator", "microwave", "washing machine",
-        "oven", "sink", "bathtub", "bench",
+        "oven", "bench",
         "blanket", "curtain", "fan", "storage_box", "box",
-        "air conditioner", "trash can", "cooker", "toaster"
+        "air conditioner", "cooker",
     ]
 furniture_keywords = {
     # 소파/의자류
@@ -217,7 +229,7 @@ if use_yolo_seg:
         masks = []
         labels = []
 
-if len(masks) == 0:
+if not use_yolo_seg and len(masks) == 0:
     try:
         seg_masks = run_entityv2(img_np, threshold=0.1, max_size=1500)
         if len(seg_masks) > 0:
