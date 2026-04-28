@@ -8,11 +8,12 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -37,6 +38,11 @@ ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".webp"}
 
 _jobs_lock = threading.Lock()
 _jobs: Dict[str, dict] = {}
+_pipeline_lock = threading.Lock()
+
+
+class BatchAggregateRequest(BaseModel):
+    job_ids: List[str]
 
 
 def _safe_stem(name: str) -> str:
@@ -98,19 +104,10 @@ def _extract_stage(line: str) -> Optional[str]:
     return None
 
 
-def _compute_summary(bbox_path: Path, one_ton_capacity_m3: float, fill_rate: float,
-                     from_elevator: bool = True, from_floor: int = 1,
-                     to_elevator: bool = True, to_floor: int = 1,
-                     distance_km: float = 10.0) -> dict:
-    bboxes = json.loads(bbox_path.read_text(encoding="utf-8"))
-    total_volume = 0.0
-    for obj in bboxes:
-        dims = obj.get("dimensions", [0.0, 0.0, 0.0])
-        if len(dims) != 3:
-            continue
-        dx, dy, dz = float(dims[0]), float(dims[1]), float(dims[2])
-        total_volume += dx * dy * dz
-
+def _compute_summary_from_total_volume(total_volume: float, one_ton_capacity_m3: float, fill_rate: float,
+                                       from_elevator: bool = True, from_floor: int = 1,
+                                       to_elevator: bool = True, to_floor: int = 1,
+                                       distance_km: float = 10.0) -> dict:
     recommended_ton = None
     for ton in range(1, 11):
         effective = one_ton_capacity_m3 * ton * fill_rate
@@ -176,6 +173,31 @@ def _compute_summary(bbox_path: Path, one_ton_capacity_m3: float, fill_rate: flo
     }
 
 
+def _compute_summary(bbox_path: Path, one_ton_capacity_m3: float, fill_rate: float,
+                     from_elevator: bool = True, from_floor: int = 1,
+                     to_elevator: bool = True, to_floor: int = 1,
+                     distance_km: float = 10.0) -> dict:
+    bboxes = json.loads(bbox_path.read_text(encoding="utf-8"))
+    total_volume = 0.0
+    for obj in bboxes:
+        dims = obj.get("dimensions", [0.0, 0.0, 0.0])
+        if len(dims) != 3:
+            continue
+        dx, dy, dz = float(dims[0]), float(dims[1]), float(dims[2])
+        total_volume += dx * dy * dz
+
+    return _compute_summary_from_total_volume(
+        total_volume=total_volume,
+        one_ton_capacity_m3=one_ton_capacity_m3,
+        fill_rate=fill_rate,
+        from_elevator=from_elevator,
+        from_floor=from_floor,
+        to_elevator=to_elevator,
+        to_floor=to_floor,
+        distance_km=distance_km,
+    )
+
+
 def _run_pipeline(job_id: str) -> None:
     job = _load_job(job_id)
     if job is None:
@@ -190,33 +212,35 @@ def _run_pipeline(job_id: str) -> None:
     env["OBJ_REC"] = str(job["obj_rec"])
     env["USE_YOLO_SEG"] = str(job["use_yolo_seg"])
 
-    _update_job(job_id, status="running", stage="starting pipeline", log_path=str(log_path))
-    start = time.time()
+    _update_job(job_id, status="queued", stage="queued (waiting turn)", log_path=str(log_path))
+    with _pipeline_lock:
+        _update_job(job_id, status="running", stage="starting pipeline", log_path=str(log_path))
+        start = time.time()
 
-    with log_path.open("w", encoding="utf-8") as log_fp:
-        proc = subprocess.Popen(
-            cmd,
-            cwd=str(REPO_ROOT),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            env=env,
-        )
+        with log_path.open("w", encoding="utf-8") as log_fp:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(REPO_ROOT),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                env=env,
+            )
 
-        assert proc.stdout is not None
-        for raw_line in proc.stdout:
-            line = raw_line.rstrip("\n")
-            log_fp.write(raw_line)
-            log_fp.flush()
+            assert proc.stdout is not None
+            for raw_line in proc.stdout:
+                line = raw_line.rstrip("\n")
+                log_fp.write(raw_line)
+                log_fp.flush()
 
-            stage = _extract_stage(line)
-            if stage:
-                _update_job(job_id, stage=stage)
+                stage = _extract_stage(line)
+                if stage:
+                    _update_job(job_id, stage=stage)
 
-        return_code = proc.wait()
+            return_code = proc.wait()
 
-    elapsed = round(time.time() - start, 2)
+        elapsed = round(time.time() - start, 2)
     if return_code != 0:
         _update_job(
             job_id,
@@ -269,35 +293,18 @@ def _run_pipeline(job_id: str) -> None:
         _jobs[job_id] = job
 
 
-app = FastAPI(title="LabelAny3D Demo API")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-@app.get("/")
-def root():
-    return FileResponse(APP_DIR / "noble_logistics_web.html")
-
-
-@app.post("/api/jobs")
-async def create_job(
-    image: UploadFile = File(...),
-    from_elevator: str = Form("true"),
-    from_floor: int = Form(1),
-    to_elevator: str = Form("true"),
-    to_floor: int = Form(1),
-    distance_km: float = Form(10.0),
-):
-    if not PIPELINE_SCRIPT.exists():
-        raise HTTPException(status_code=500, detail="Pipeline script not found.")
-
-    print(f"[DEBUG] from_elevator={from_elevator}, from_floor={from_floor}, to_elevator={to_elevator}, to_floor={to_floor}, distance_km={distance_km}")
+async def _create_job_from_upload(
+    image: UploadFile,
+    from_elevator: str,
+    from_floor: int,
+    to_elevator: str,
+    to_floor: int,
+    distance_km: float,
+) -> dict:
     ext = Path(image.filename or "").suffix.lower()
     if ext not in ALLOWED_EXT:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+
     data = await image.read()
     if len(data) > MAX_UPLOAD_MB * 1024 * 1024:
         raise HTTPException(status_code=400, detail=f"Image exceeds {MAX_UPLOAD_MB}MB limit.")
@@ -333,8 +340,73 @@ async def create_job(
 
     worker = threading.Thread(target=_run_pipeline, args=(job_id,), daemon=True)
     worker.start()
+    return job
 
-    return {"job_id": job_id, "status": "queued"}
+
+app = FastAPI(title="LabelAny3D Demo API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+@app.get("/")
+def root():
+    return FileResponse(APP_DIR / "noble_logistics_web.html")
+
+
+@app.post("/api/jobs")
+async def create_job(
+    image: UploadFile = File(...),
+    from_elevator: str = Form("true"),
+    from_floor: int = Form(1),
+    to_elevator: str = Form("true"),
+    to_floor: int = Form(1),
+    distance_km: float = Form(10.0),
+):
+    if not PIPELINE_SCRIPT.exists():
+        raise HTTPException(status_code=500, detail="Pipeline script not found.")
+
+    print(f"[DEBUG] from_elevator={from_elevator}, from_floor={from_floor}, to_elevator={to_elevator}, to_floor={to_floor}, distance_km={distance_km}")
+    job = await _create_job_from_upload(
+        image=image,
+        from_elevator=from_elevator,
+        from_floor=from_floor,
+        to_elevator=to_elevator,
+        to_floor=to_floor,
+        distance_km=distance_km,
+    )
+    return {"job_id": job["job_id"], "status": "queued"}
+
+
+@app.post("/api/jobs/batch")
+async def create_jobs_batch(
+    images: List[UploadFile] = File(...),
+    from_elevator: str = Form("true"),
+    from_floor: int = Form(1),
+    to_elevator: str = Form("true"),
+    to_floor: int = Form(1),
+    distance_km: float = Form(10.0),
+):
+    if not PIPELINE_SCRIPT.exists():
+        raise HTTPException(status_code=500, detail="Pipeline script not found.")
+    if not images:
+        raise HTTPException(status_code=400, detail="No images provided.")
+
+    jobs = []
+    for image in images:
+        job = await _create_job_from_upload(
+            image=image,
+            from_elevator=from_elevator,
+            from_floor=from_floor,
+            to_elevator=to_elevator,
+            to_floor=to_floor,
+            distance_km=distance_km,
+        )
+        jobs.append({"job_id": job["job_id"], "status": "queued", "image_name": job["image_name"]})
+
+    return {"count": len(jobs), "jobs": jobs}
 
 
 @app.get("/api/jobs/{job_id}")
@@ -373,6 +445,71 @@ def get_job_result(job_id: str):
         "total_extra_cost": job["result"]["total_extra_cost"],
         "total_estimated_price": job["result"]["total_estimated_price"],
         "needs_ladder_truck": job["result"]["needs_ladder_truck"],
+    }
+
+
+@app.post("/api/jobs/batch/aggregate")
+def get_batch_aggregate(req: BatchAggregateRequest):
+    if not req.job_ids:
+        raise HTTPException(status_code=400, detail="job_ids is empty.")
+
+    jobs = []
+    for job_id in req.job_ids:
+        job = _load_job(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+        jobs.append(job)
+
+    done_jobs = [j for j in jobs if j.get("status") == "done" and j.get("result")]
+    failed_jobs = [j for j in jobs if j.get("status") == "failed"]
+    pending_jobs = [j for j in jobs if j.get("status") not in ["done", "failed"]]
+
+    if pending_jobs:
+        raise HTTPException(status_code=409, detail="Some jobs are not finished yet.")
+    if not done_jobs:
+        raise HTTPException(status_code=409, detail="No successful jobs to aggregate.")
+
+    volume_breakdown = []
+    total_volume = 0.0
+    total_elapsed_sec = 0.0
+    for j in done_jobs:
+        vol = float(j["result"]["total_volume_m3"])
+        elapsed = float(j.get("elapsed_sec") or 0.0)
+        total_volume += vol
+        total_elapsed_sec += elapsed
+        volume_breakdown.append(
+            {
+                "job_id": j["job_id"],
+                "image_name": j.get("image_name"),
+                "volume_m3": round(vol, 4),
+                "elapsed_sec": round(elapsed, 2),
+            }
+        )
+
+    volume_breakdown.sort(key=lambda x: x["image_name"] or "")
+    ref_job = done_jobs[0]
+    summary = _compute_summary_from_total_volume(
+        total_volume=total_volume,
+        one_ton_capacity_m3=float(ref_job["one_ton_capacity_m3"]),
+        fill_rate=float(ref_job["fill_rate"]),
+        from_elevator=bool(ref_job.get("from_elevator", True)),
+        from_floor=int(ref_job.get("from_floor", 1)),
+        to_elevator=bool(ref_job.get("to_elevator", True)),
+        to_floor=int(ref_job.get("to_floor", 1)),
+        distance_km=float(ref_job.get("distance_km", 10.0)),
+    )
+
+    return {
+        "total_jobs": len(jobs),
+        "done_jobs": len(done_jobs),
+        "failed_jobs": len(failed_jobs),
+        "volume_breakdown": volume_breakdown,
+        "volume_total_m3": round(total_volume, 4),
+        "elapsed_total_sec": round(total_elapsed_sec, 2),
+        "volume_log": " + ".join(
+            [f'{v["image_name"]}: {v["volume_m3"]:.4f}m³' for v in volume_breakdown]
+        ) + f" = 총 {round(total_volume, 4):.4f}m³",
+        "summary": summary,
     }
 
 

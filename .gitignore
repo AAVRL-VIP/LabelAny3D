@@ -50,3 +50,4 @@ dataset/
 external/
 run_single_image.sh
 src/taming-transformers/
+web_demo/runtime/

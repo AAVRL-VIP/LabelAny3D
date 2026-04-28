@@ -448,7 +448,7 @@ body { font-family: 'Noto Sans KR', sans-serif; background: #f0f4f8; color: #1a1
           <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
           견적 시작
         </button>
-        <input id="imageInput" type="file" accept=".jpg,.jpeg,.png,.webp" style="display:none;" />
+        <input id="imageInput" type="file" accept=".jpg,.jpeg,.png,.webp" multiple style="display:none;" />
         <div id="previewWrap" style="display:none; margin-top:12px; align-items:center; gap:12px;">
           <img id="previewImg" style="width:80px; height:60px; object-fit:cover; border-radius:10px; border:2px solid rgba(255,255,255,0.4);" />
           <span id="previewName" style="font-size:13px; opacity:0.9;"></span>
@@ -596,7 +596,7 @@ body { font-family: 'Noto Sans KR', sans-serif; background: #f0f4f8; color: #1a1
               <svg viewBox="0 0 24 24" fill="none" stroke="#8896ab" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
             </div>
             <div class="transport-name">업로드 방식</div>
-            <div class="transport-count">이미지 1장 자동분석</div>
+            <div class="transport-count">여러 이미지 일괄분석</div>
           </div>
         </div>
 
@@ -657,7 +657,11 @@ const progressBar = document.getElementById('progressBar');
 const logBtn = document.getElementById('logBtn');
 
 let currentJobId = null;
-let pollTimer = null;
+let selectedFiles = [];
+let batchJobIds = [];
+let batchDoneCount = 0;
+let batchFailedCount = 0;
+let batchResults = [];
 
 function setStatus(text, isError = false) {
   statusEl.textContent = text;
@@ -697,107 +701,74 @@ async function fetchJson(url, options = {}) {
   return data;
 }
 
-async function startJob(file) {
+async function startBatchJobs(files) {
   const form = new FormData();
-  form.append('image', file);
+  for (const file of files) form.append('images', file);
   form.append('from_elevator', document.getElementById('fromElevator').value);
   form.append('from_floor', document.getElementById('fromFloor').value);
   form.append('to_elevator', document.getElementById('toElevator').value);
   form.append('to_floor', document.getElementById('toFloor').value);
   form.append('distance_km', document.getElementById('distanceInput').value);
-  const data = await fetchJson('/api/jobs', { method: 'POST', body: form });
-  currentJobId = data.job_id;
-  setStatus(`업로드 완료. 분석 시작 (${currentJobId})`);
-  pipelineStatusEl.textContent = '실행중';
-  stageTextEl.textContent = '초기화';
-  progressBar.style.width = '10%';
-  totalVolumeEl.textContent = '-';
-  truckNameEl.textContent = '-';
-  truckCountEl.textContent = '-';
-
-  if (pollTimer) clearInterval(pollTimer);
-  pollTimer = setInterval(pollJob, 2500);
+  const data = await fetchJson('/api/jobs/batch', { method: 'POST', body: form });
+  return data.jobs || [];
 }
 
-async function pollJob() {
-  if (!currentJobId) return;
-  try {
-    const state = await fetchJson(`/api/jobs/${currentJobId}`);
-    const stageK = stageToKorean(state.stage);
-    stageTextEl.textContent = stageK;
-    progressBar.style.width = `${stageToPercent(state.stage)}%`;
+async function waitForSingleJob(jobId, index, totalCount) {
+  while (true) {
+    try {
+      const state = await fetchJson(`/api/jobs/${jobId}`);
+      const stageK = stageToKorean(state.stage);
+      stageTextEl.textContent = `${index}/${totalCount} ${stageK}`;
+      progressBar.style.width = `${Math.max(5, Math.round((((index - 1) + stageToPercent(state.stage) / 100) / totalCount) * 100))}%`;
 
-    if (typeof state.elapsed_sec === 'number') {
-      elapsedSecEl.textContent = state.elapsed_sec.toFixed(1);
+      if (typeof state.elapsed_sec === 'number') elapsedSecEl.textContent = state.elapsed_sec.toFixed(1);
+      if (state.status === 'failed') return null;
+      if (state.status === 'done') return await fetchJson(`/api/jobs/${jobId}/result`);
+    } catch (_) {
+      return null;
     }
-
-    if (state.status === 'failed') {
-      clearInterval(pollTimer);
-      pipelineStatusEl.textContent = '실패';
-      setStatus(`분석 실패: ${state.error || '알 수 없는 오류'}`, true);
-      return;
-    }
-
-    if (state.status !== 'done') {
-      setStatus(`분석 중... (${stageK})`);
-      return;
-    }
-
-    const result = await fetchJson(`/api/jobs/${currentJobId}/result`);
-    clearInterval(pollTimer);
-    pipelineStatusEl.textContent = '완료';
-    progressBar.style.width = '100%';
-    totalVolumeEl.textContent = Number(result.total_volume_m3).toFixed(2);
-
-    if (result.recommended_truck_ton !== null) {
-      truckNameEl.textContent = `${result.recommended_truck_ton}톤 트럭`;
-      truckCountEl.textContent = '1대';
-    } else {
-      const n = result.min_10t_trucks_needed || 1;
-      truckNameEl.textContent = '10톤 이상';
-      truckCountEl.textContent = `${n}대 필요`;
-    }
-    // 인력
-    const workersEl = document.getElementById('workersValue');
-    if (workersEl) workersEl.textContent = result.estimated_workers || '-';
-
-    // 비용
-    const basePriceEl = document.getElementById('basePriceValue');
-    const extraTotalEl = document.getElementById('extraTotalValue');
-    const grandTotalEl = document.getElementById('grandTotalValue');
-    const totalPriceEl = document.getElementById('totalPriceValue');
-    const extraSection = document.getElementById('extraCostsSection');
-    const extraList = document.getElementById('extraCostsList');
-    const ladderAlert = document.getElementById('ladderTruckAlert');
-
-    if (basePriceEl) basePriceEl.textContent = `${(result.base_price||0).toLocaleString()}원`;
-    if (extraTotalEl) extraTotalEl.textContent = `+${(result.total_extra_cost||0).toLocaleString()}원`;
-    if (grandTotalEl) grandTotalEl.textContent = `${(result.total_estimated_price||0).toLocaleString()}원`;
-    if (totalPriceEl) totalPriceEl.textContent = `${Math.round((result.total_estimated_price||0)/10000)}만원`;
-
-    if (extraSection) extraSection.style.display = 'block';
-    if (extraList && result.extra_costs) {
-      extraList.innerHTML = result.extra_costs.map(c =>
-        `<div class="volume-row"><span class="volume-label">${c.item}</span><span class="volume-value" style="color:#d97706;">+${c.amount.toLocaleString()}원</span></div>`
-      ).join('') || '<div style="font-size:12px; color:#8896ab; text-align:center; padding:8px;">추가 비용 없음</div>';
-    }
-    if (ladderAlert) ladderAlert.style.display = result.needs_ladder_truck ? 'block' : 'none';
-
-    setStatus('분석이 완료되었습니다.');
-  } catch (err) {
-    clearInterval(pollTimer);
-    pipelineStatusEl.textContent = '오류';
-    setStatus(`요청 오류: ${err.message}`, true);
+    await new Promise((resolve) => setTimeout(resolve, 2000));
   }
 }
 
-let selectedFile = null;
+function renderSummaryResult(result, aggregateMeta = null) {
+  totalVolumeEl.textContent = Number(result.total_volume_m3 || 0).toFixed(2);
+  if (result.recommended_truck_ton !== null) {
+    truckNameEl.textContent = `${result.recommended_truck_ton}톤 트럭`;
+    truckCountEl.textContent = '1대';
+  } else {
+    const n = result.min_10t_trucks_needed || 1;
+    truckNameEl.textContent = '10톤 이상';
+    truckCountEl.textContent = `${n}대 필요`;
+  }
+
+  document.getElementById('workersValue').textContent = result.estimated_workers || '-';
+  document.getElementById('basePriceValue').textContent = `${(result.base_price || 0).toLocaleString()}원`;
+  document.getElementById('extraTotalValue').textContent = `+${(result.total_extra_cost || 0).toLocaleString()}원`;
+  document.getElementById('grandTotalValue').textContent = `${(result.total_estimated_price || 0).toLocaleString()}원`;
+  document.getElementById('totalPriceValue').textContent = `${Math.round((result.total_estimated_price || 0) / 10000)}만원`;
+
+  document.getElementById('extraCostsSection').style.display = 'block';
+  document.getElementById('ladderTruckAlert').style.display = result.needs_ladder_truck ? 'block' : 'none';
+  const volumeLogHtml = aggregateMeta && aggregateMeta.volume_breakdown
+    ? `<div style="font-size:12px; color:#2563eb; background:#eef4ff; border:1px solid #c7dbff; border-radius:8px; padding:10px; margin-bottom:8px;">
+        <div style="font-weight:600; margin-bottom:6px;">사진별 부피 로그</div>
+        ${(aggregateMeta.volume_breakdown || []).map((v) =>
+          `<div>${v.image_name || v.job_id}: ${Number(v.volume_m3 || 0).toFixed(4)}m³ (${Number(v.elapsed_sec || 0).toFixed(1)}초)</div>`
+        ).join('')}
+        <div style="margin-top:6px; font-weight:700;">총합: ${Number(aggregateMeta.volume_total_m3 || 0).toFixed(4)}m³ / 총 처리시간: ${Number(aggregateMeta.elapsed_total_sec || 0).toFixed(1)}초</div>
+      </div>`
+    : '';
+  document.getElementById('extraCostsList').innerHTML = volumeLogHtml + (result.extra_costs || []).map((c) =>
+    `<div class="volume-row"><span class="volume-label">${c.item}</span><span class="volume-value" style="color:#d97706;">+${c.amount.toLocaleString()}원</span></div>`
+  ).join('') || '<div style="font-size:12px; color:#8896ab; text-align:center; padding:8px;">추가 비용 없음</div>';
+}
 
 uploadBtn.addEventListener('click', () => imageInput.click());
 imageInput.addEventListener('change', (e) => {
-  const file = e.target.files && e.target.files[0];
-  if (!file) return;
-  selectedFile = file;
+  const files = e.target.files ? Array.from(e.target.files) : [];
+  if (!files.length) return;
+  selectedFiles = files;
 
   // 미리보기
   const previewWrap = document.getElementById('previewWrap');
@@ -807,32 +778,76 @@ imageInput.addEventListener('change', (e) => {
 
   const reader = new FileReader();
   reader.onload = (ev) => { previewImg.src = ev.target.result; };
-  reader.readAsDataURL(file);
-  previewName.textContent = file.name;
+  reader.readAsDataURL(files[0]);
+  previewName.textContent = files.length === 1 ? files[0].name : `${files[0].name} 외 ${files.length - 1}장`;
   previewWrap.style.display = 'flex';
 
   startBtn.disabled = false;
   startBtn.style.opacity = '1';
-  setStatus('사진이 선택되었습니다. 견적 시작 버튼을 눌러주세요.');
+  setStatus(`${files.length}장의 사진이 선택되었습니다. 견적 시작 버튼을 눌러주세요.`);
   imageInput.value = '';
 });
 
 document.getElementById('startBtn').addEventListener('click', async () => {
-  if (!selectedFile) {
+  if (!selectedFiles.length) {
     setStatus('먼저 사진을 선택해주세요.', true);
     return;
   }
-  setStatus('이미지 업로드 중...');
+  setStatus(`${selectedFiles.length}장 업로드 중...`);
   const startBtn = document.getElementById('startBtn');
   startBtn.disabled = true;
   startBtn.style.opacity = '0.5';
   try {
-    await startJob(selectedFile);
+    const jobs = await startBatchJobs(selectedFiles);
+    if (!jobs.length) throw new Error('생성된 작업이 없습니다.');
+
+    batchJobIds = jobs.map((j) => j.job_id);
+    batchDoneCount = 0;
+    batchFailedCount = 0;
+    batchResults = [];
+    pipelineStatusEl.textContent = '실행중';
+    totalVolumeEl.textContent = '-';
+    truckNameEl.textContent = '-';
+    truckCountEl.textContent = '-';
+    stageTextEl.textContent = `0/${batchJobIds.length} 완료`;
+    progressBar.style.width = '5%';
+
+    for (let i = 0; i < batchJobIds.length; i++) {
+      const jobId = batchJobIds[i];
+      currentJobId = jobId;
+      setStatus(`분석 진행 중... (${i + 1}/${batchJobIds.length})`);
+      const result = await waitForSingleJob(jobId, i + 1, batchJobIds.length);
+      if (result) {
+        batchDoneCount += 1;
+        batchResults.push(result);
+      } else {
+        batchFailedCount += 1;
+      }
+    }
+
+    if (batchDoneCount > 0) {
+      const aggregate = await fetchJson('/api/jobs/batch/aggregate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_ids: batchJobIds }),
+      });
+      elapsedSecEl.textContent = Number(aggregate.elapsed_total_sec || 0).toFixed(1);
+      renderSummaryResult(aggregate.summary, aggregate);
+    }
+
+    pipelineStatusEl.textContent = batchDoneCount > 0 ? (batchFailedCount > 0 ? '부분완료' : '완료') : '실패';
+    stageTextEl.textContent = `${batchDoneCount}/${batchJobIds.length} 완료`;
+    progressBar.style.width = '100%';
+    if (batchDoneCount > 0) {
+      setStatus(`배치 분석 완료: 성공 ${batchDoneCount}건, 실패 ${batchFailedCount}건`);
+    } else {
+      setStatus('배치 분석에 실패했습니다.', true);
+    }
   } catch (err) {
     setStatus(`업로드 실패: ${err.message}`, true);
-    startBtn.disabled = false;
-    startBtn.style.opacity = '1';
   }
+  startBtn.disabled = false;
+  startBtn.style.opacity = '1';
 });
 
 logBtn.addEventListener('click', () => {
