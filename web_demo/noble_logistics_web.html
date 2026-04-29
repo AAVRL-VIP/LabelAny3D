@@ -9,6 +9,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: 'Noto Sans KR', sans-serif; background: #f0f4f8; color: #1a1a2e; min-height: 100vh; }
 
+/* ── Header ── */
 .header {
   background: white;
   border-bottom: 1px solid #e8ecf2;
@@ -25,56 +26,28 @@ body { font-family: 'Noto Sans KR', sans-serif; background: #f0f4f8; color: #1a1
   align-items: center;
   justify-content: space-between;
 }
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
+.logo { display: flex; align-items: center; gap: 10px; }
 .logo-icon {
-  width: 40px;
-  height: 40px;
+  width: 40px; height: 40px;
   background: linear-gradient(135deg, #5b9bf5, #3b7ddd);
   border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: flex; align-items: center; justify-content: center;
 }
 .logo-icon svg { width: 22px; height: 22px; }
-.logo-text {
-  font-size: 20px;
-  font-weight: 700;
-  color: #2563eb;
-}
-.logo-sub {
-  font-size: 12px;
-  color: #8896ab;
-  font-weight: 400;
-}
-.nav-links {
-  display: flex;
-  gap: 32px;
-  align-items: center;
-}
-.nav-links a {
-  text-decoration: none;
-  color: #5a6577;
-  font-size: 14px;
-  font-weight: 500;
-  transition: color 0.2s;
-}
-.nav-links a:hover { color: #2563eb; }
-.nav-links a.active { color: #2563eb; }
+.logo-text { font-size: 20px; font-weight: 700; color: #2563eb; }
+.logo-sub { font-size: 12px; color: #8896ab; font-weight: 400; }
+.nav-links { display: flex; gap: 32px; align-items: center; }
+.nav-links a { text-decoration: none; color: #5a6577; font-size: 14px; font-weight: 500; transition: color 0.2s; }
+.nav-links a:hover, .nav-links a.active { color: #2563eb; }
 .user-avatar {
-  width: 36px;
-  height: 36px;
+  width: 36px; height: 36px;
   background: linear-gradient(135deg, #5b9bf5, #3b7ddd);
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: flex; align-items: center; justify-content: center;
 }
 .user-avatar svg { width: 18px; height: 18px; }
 
+/* ── Home Layout ── */
 .main { max-width: 1200px; margin: 0 auto; padding: 32px; }
 
 .hero-card {
@@ -92,89 +65,56 @@ body { font-family: 'Noto Sans KR', sans-serif; background: #f0f4f8; color: #1a1
 .hero-card::before {
   content: '';
   position: absolute;
-  top: -40px;
-  right: -40px;
-  width: 200px;
-  height: 200px;
+  top: -40px; right: -40px;
+  width: 200px; height: 200px;
   background: rgba(255,255,255,0.08);
   border-radius: 50%;
 }
 .hero-card::after {
   content: '';
   position: absolute;
-  bottom: -60px;
-  right: 120px;
-  width: 160px;
-  height: 160px;
+  bottom: -60px; right: 120px;
+  width: 160px; height: 160px;
   background: rgba(255,255,255,0.05);
   border-radius: 50%;
 }
 .hero-left { position: relative; z-index: 1; }
 .hero-label {
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 12px; font-weight: 500;
   background: rgba(255,255,255,0.2);
-  padding: 4px 12px;
-  border-radius: 20px;
-  display: inline-block;
-  margin-bottom: 12px;
-  letter-spacing: 0.5px;
+  padding: 4px 12px; border-radius: 20px;
+  display: inline-block; margin-bottom: 12px; letter-spacing: 0.5px;
 }
-.hero-title {
-  font-size: 26px;
-  font-weight: 700;
-  line-height: 1.4;
-  margin-bottom: 8px;
-}
-.hero-desc {
-  font-size: 14px;
-  opacity: 0.85;
-  margin-bottom: 24px;
-  line-height: 1.6;
-}
+.hero-title { font-size: 26px; font-weight: 700; line-height: 1.4; margin-bottom: 8px; }
+.hero-desc { font-size: 14px; opacity: 0.85; margin-bottom: 24px; line-height: 1.6; }
 .hero-buttons { display: flex; gap: 12px; }
 .btn-hero {
-  padding: 12px 24px;
+  padding: 13px 28px;
   border-radius: 12px;
-  font-size: 14px;
-  font-weight: 600;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  font-size: 15px; font-weight: 600;
+  border: none; cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
   transition: transform 0.15s, box-shadow 0.15s;
   font-family: 'Noto Sans KR', sans-serif;
 }
 .btn-hero:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
 .btn-hero.primary { background: white; color: #2563eb; }
-.btn-hero.secondary { background: rgba(255,255,255,0.18); color: white; border: 1px solid rgba(255,255,255,0.3); }
 .btn-hero svg { width: 18px; height: 18px; }
 .hero-right {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  gap: 12px;
+  position: relative; z-index: 1;
+  display: flex; gap: 12px;
 }
 .hero-img-placeholder {
-  width: 180px;
-  height: 130px;
+  width: 180px; height: 130px;
   background: rgba(255,255,255,0.12);
   border-radius: 12px;
   border: 1px solid rgba(255,255,255,0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: flex; align-items: center; justify-content: center;
   backdrop-filter: blur(4px);
 }
 .hero-img-placeholder svg { width: 48px; height: 48px; opacity: 0.5; }
 
-.section-title {
-  font-size: 18px;
-  font-weight: 600;
-  margin-bottom: 20px;
-  color: #1a1a2e;
-}
+.section-title { font-size: 18px; font-weight: 600; margin-bottom: 20px; color: #1a1a2e; }
 
 .content-grid {
   display: grid;
@@ -182,230 +122,336 @@ body { font-family: 'Noto Sans KR', sans-serif; background: #f0f4f8; color: #1a1
   gap: 24px;
 }
 
+/* ── Room Cards ── */
 .rooms-list { display: flex; flex-direction: column; gap: 12px; }
 .room-card {
   background: white;
   border-radius: 16px;
   padding: 20px 24px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
+  display: flex; align-items: center; gap: 16px;
   border: 1px solid #e8ecf2;
   cursor: pointer;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
-.room-card:hover {
-  border-color: #5b9bf5;
-  box-shadow: 0 2px 12px rgba(91,155,245,0.12);
-}
+.room-card:hover { border-color: #5b9bf5; box-shadow: 0 2px 12px rgba(91,155,245,0.12); }
 .room-icon {
-  width: 52px;
-  height: 52px;
-  background: #eef4ff;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  width: 52px; height: 52px;
+  background: #eef4ff; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
 .room-icon svg { width: 24px; height: 24px; }
-.room-info { flex: 1; }
-.room-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.room-info { flex: 1; min-width: 0; }
+.room-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .room-meta { font-size: 12px; color: #8896ab; }
 .room-status {
-  padding: 6px 14px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 600;
+  padding: 6px 14px; border-radius: 8px;
+  font-size: 12px; font-weight: 600; white-space: nowrap;
 }
 .room-status.done { background: #eef4ff; color: #2563eb; }
 .room-status.processing { background: #fff8e6; color: #d97706; }
-.room-photos {
-  display: flex;
-  gap: 4px;
-}
-.room-photo {
-  width: 44px;
-  height: 44px;
-  background: #e8ecf2;
-  border-radius: 8px;
-}
+.room-status.failed { background: #fef2f2; color: #dc2626; }
+.room-photos { display: flex; gap: 4px; }
+.room-photo { width: 44px; height: 44px; background: #e8ecf2; border-radius: 8px; overflow: hidden; }
+.room-photo img { width: 100%; height: 100%; object-fit: cover; }
 
 .add-room {
-  background: white;
-  border-radius: 16px;
+  background: white; border-radius: 16px;
   padding: 20px 24px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
+  display: flex; align-items: center; gap: 16px;
   border: 2px dashed #d0d8e4;
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
 }
 .add-room:hover { border-color: #5b9bf5; background: #f8faff; }
 .add-icon {
-  width: 52px;
-  height: 52px;
-  background: #f0f4f8;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 52px; height: 52px;
+  background: #f0f4f8; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
 }
 .add-icon svg { width: 24px; height: 24px; }
 .add-text { font-size: 15px; font-weight: 500; color: #8896ab; }
 
+/* ── Estimate Panel (Home Right) ── */
 .estimate-panel {
-  background: white;
-  border-radius: 20px;
+  background: white; border-radius: 20px;
   border: 1px solid #e8ecf2;
   padding: 28px;
-  position: sticky;
-  top: 88px;
+  position: sticky; top: 88px;
 }
-.estimate-header {
-  text-align: center;
-  margin-bottom: 24px;
-}
-.estimate-label {
-  font-size: 13px;
-  color: #8896ab;
-  margin-bottom: 8px;
-}
-.estimate-volume {
-  font-size: 48px;
-  font-weight: 700;
-  color: #2563eb;
-  line-height: 1;
-}
-.estimate-unit {
-  font-size: 18px;
-  font-weight: 400;
-  color: #5b9bf5;
-}
+.estimate-header { text-align: center; margin-bottom: 24px; }
+.estimate-label { font-size: 13px; color: #8896ab; margin-bottom: 8px; }
+.estimate-volume { font-size: 48px; font-weight: 700; color: #2563eb; line-height: 1; }
+.estimate-unit { font-size: 18px; font-weight: 400; color: #5b9bf5; }
 
 .estimate-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 24px;
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 10px; margin-bottom: 24px;
 }
-.stat-card {
-  background: #f0f4ff;
-  border-radius: 12px;
-  padding: 14px;
-  text-align: center;
-}
-.stat-value {
-  font-size: 20px;
-  font-weight: 700;
-  color: #2563eb;
-}
-.stat-label {
-  font-size: 11px;
-  color: #6b82a6;
-  margin-top: 2px;
-}
+.stat-card { background: #f0f4ff; border-radius: 12px; padding: 14px; text-align: center; }
+.stat-value { font-size: 20px; font-weight: 700; color: #2563eb; }
+.stat-label { font-size: 11px; color: #6b82a6; margin-top: 2px; }
 
 .estimate-section-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1a1a2e;
+  font-size: 13px; font-weight: 600; color: #1a1a2e;
   margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  display: flex; align-items: center; gap: 6px;
 }
 .estimate-section-title svg { width: 16px; height: 16px; }
 
-.transport-options {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 24px;
-}
+.transport-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 24px; }
 .transport-card {
-  border: 1.5px solid #e8ecf2;
-  border-radius: 14px;
-  padding: 16px;
-  text-align: center;
-  transition: border-color 0.2s;
+  border: 1.5px solid #e8ecf2; border-radius: 14px;
+  padding: 16px; text-align: center; transition: border-color 0.2s;
 }
 .transport-card.recommended { border-color: #5b9bf5; background: #f8faff; }
 .transport-icon {
-  width: 44px;
-  height: 44px;
+  width: 44px; height: 44px;
   margin: 0 auto 8px;
-  background: #eef4ff;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background: #eef4ff; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
 }
 .transport-icon svg { width: 24px; height: 24px; }
 .transport-name { font-size: 14px; font-weight: 600; color: #1a1a2e; }
 .transport-count { font-size: 12px; color: #5b9bf5; font-weight: 500; margin-top: 2px; }
 .transport-badge {
-  font-size: 10px;
-  background: #2563eb;
-  color: white;
-  padding: 2px 8px;
-  border-radius: 10px;
-  display: inline-block;
-  margin-bottom: 8px;
+  font-size: 10px; background: #2563eb; color: white;
+  padding: 2px 8px; border-radius: 10px;
+  display: inline-block; margin-bottom: 8px;
 }
 
 .room-volumes { margin-bottom: 24px; }
 .volume-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
+  display: flex; align-items: center;
+  justify-content: space-between; margin-bottom: 10px;
 }
 .volume-label { font-size: 13px; color: #5a6577; }
 .volume-value { font-size: 13px; font-weight: 600; color: #2563eb; }
-.volume-bar {
-  height: 8px;
-  background: #eef4ff;
-  border-radius: 4px;
-  margin-bottom: 16px;
-  overflow: hidden;
-}
-.volume-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #5b9bf5, #3b7ddd); }
+.volume-bar { height: 8px; background: #eef4ff; border-radius: 4px; margin-bottom: 16px; overflow: hidden; }
+.volume-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #5b9bf5, #3b7ddd); transition: width 0.4s; }
 
 .btn-download {
-  width: 100%;
-  padding: 14px;
+  width: 100%; padding: 14px;
   background: linear-gradient(135deg, #5b9bf5, #2563eb);
-  color: white;
-  border: none;
-  border-radius: 14px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
+  color: white; border: none; border-radius: 14px;
+  font-size: 15px; font-weight: 600; cursor: pointer;
   font-family: 'Noto Sans KR', sans-serif;
   transition: transform 0.15s, box-shadow 0.15s;
 }
-.btn-download:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 20px rgba(37,99,235,0.3);
+.btn-download:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(37,99,235,0.3); }
+.job-status { margin-top: 10px; font-size: 12px; color: #6b7280; text-align: center; }
+
+/* ── Upload View ── */
+.upload-topbar {
+  background: white;
+  border-bottom: 1px solid #e8ecf2;
+  padding: 14px 32px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
-.job-status {
-  margin-top: 10px;
-  font-size: 12px;
-  color: #6b7280;
-  text-align: center;
+.back-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 18px;
+  background: #f0f4f8; border: none;
+  border-radius: 10px;
+  font-size: 14px; font-weight: 600; color: #5a6577;
+  cursor: pointer; font-family: inherit;
+  transition: background 0.2s, color 0.2s;
+}
+.back-btn:hover { background: #e8ecf2; color: #1a1a2e; }
+.back-btn svg { width: 16px; height: 16px; }
+.upload-topbar-title { font-size: 16px; font-weight: 700; color: #1a1a2e; }
+
+.upload-main { max-width: 960px; margin: 0 auto; padding: 32px; display: flex; flex-direction: column; gap: 24px; }
+.upload-card {
+  background: white; border: 1px solid #e8ecf2;
+  border-radius: 20px;
+  box-shadow: 0 2px 12px rgba(15,23,42,0.06);
+  padding: 32px;
+}
+.up-section-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+  color: #2563eb; background: #eef4ff;
+  padding: 4px 12px; border-radius: 20px; margin-bottom: 8px;
+}
+.up-section-title { font-size: 20px; font-weight: 700; color: #1a1a2e; }
+.up-section-sub { font-size: 13px; color: #8896ab; margin-top: 4px; margin-bottom: 24px; }
+
+.guideline-box {
+  background: #fffbeb; border: 1.5px solid #fcd34d;
+  border-radius: 14px; padding: 16px 20px;
+  display: flex; align-items: flex-start; gap: 12px;
+  margin-bottom: 24px;
+}
+.guideline-icon {
+  flex-shrink: 0; width: 36px; height: 36px;
+  background: #fef3c7; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+}
+.guideline-icon svg { width: 20px; height: 20px; }
+.guideline-text { font-size: 14px; color: #92400e; line-height: 1.6; font-weight: 500; }
+.guideline-text strong { font-weight: 700; display: block; margin-bottom: 2px; }
+
+.dropzone {
+  border: 2px dashed #c7dbff; border-radius: 16px;
+  padding: 40px 24px; text-align: center; cursor: pointer;
+  transition: border-color 0.2s, background 0.2s; background: #f8faff;
+}
+.dropzone:hover, .dropzone.drag-over { border-color: #2563eb; background: #eef4ff; }
+.dropzone-icon {
+  width: 56px; height: 56px; background: #eef4ff; border-radius: 16px;
+  display: flex; align-items: center; justify-content: center; margin: 0 auto 14px;
+}
+.dropzone-icon svg { width: 28px; height: 28px; }
+.dropzone-title { font-size: 16px; font-weight: 600; color: #1a1a2e; margin-bottom: 6px; }
+.dropzone-sub { font-size: 13px; color: #8896ab; }
+.dropzone-btn {
+  display: inline-block; margin-top: 14px;
+  padding: 10px 24px; background: #2563eb; color: white;
+  border-radius: 10px; font-size: 14px; font-weight: 600;
+  border: none; cursor: pointer; font-family: inherit; transition: background 0.2s;
+}
+.dropzone-btn:hover { background: #1d4ed8; }
+
+.preview-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+.preview-item {
+  position: relative; width: 100px; height: 80px;
+  border-radius: 10px; overflow: hidden; border: 2px solid #e8ecf2;
+}
+.preview-item img { width: 100%; height: 100%; object-fit: cover; }
+.preview-remove {
+  position: absolute; top: 4px; right: 4px;
+  width: 20px; height: 20px;
+  background: rgba(0,0,0,0.55); border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 12px; color: white; border: none;
+}
+.preview-count { font-size: 13px; color: #5a6577; margin-top: 8px; }
+
+/* ── Calculator Section ── */
+.calc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.field-group { margin-bottom: 20px; }
+.field-label {
+  font-size: 12px; font-weight: 600; color: #5a6577;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
+}
+.field-label svg { width: 14px; height: 14px; }
+.location-box { background: #f8faff; border: 1px solid #e8ecf2; border-radius: 14px; padding: 16px; }
+.location-row { display: flex; gap: 12px; }
+.field-wrap { flex: 1; }
+.field-wrap label { font-size: 12px; color: #8896ab; display: block; margin-bottom: 6px; }
+.field-wrap input, .field-wrap select {
+  width: 100%; padding: 10px 12px;
+  border: 1px solid #dbe3ef; border-radius: 10px;
+  font: inherit; font-size: 14px; color: #1a1a2e; background: white;
+  transition: border-color 0.2s;
+}
+.field-wrap input:focus, .field-wrap select:focus { outline: none; border-color: #5b9bf5; }
+.field-wrap input[type=number] { -moz-appearance: textfield; }
+.field-wrap input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+.distance-row { display: flex; align-items: center; gap: 10px; }
+.distance-row input { max-width: 140px; padding: 10px 12px; border: 1px solid #dbe3ef; border-radius: 10px; font: inherit; font-size: 14px; }
+.distance-row span { font-size: 14px; color: #5a6577; }
+
+/* ── Charge Panel ── */
+.charge-panel { display: flex; flex-direction: column; }
+.charge-panel-title {
+  font-size: 14px; font-weight: 700; color: #1a1a2e;
+  margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+}
+.charge-panel-title svg { width: 16px; height: 16px; }
+.charge-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 0; border-bottom: 1px solid #f0f4f8;
+}
+.charge-item:last-of-type { border-bottom: none; }
+.charge-left { display: flex; align-items: center; gap: 10px; }
+.charge-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.charge-dot.stair { background: #d97706; }
+.charge-dot.ladder { background: #dc2626; }
+.charge-dot.dist { background: #7c3aed; }
+.charge-dot.off { background: #d1d5db; }
+.charge-name { font-size: 13px; color: #374151; }
+.charge-sub { font-size: 11px; color: #8896ab; margin-top: 2px; }
+.charge-amount { font-size: 14px; font-weight: 700; }
+.charge-amount.stair { color: #d97706; }
+.charge-amount.ladder { color: #dc2626; }
+.charge-amount.dist { color: #7c3aed; }
+.charge-amount.off { color: #9ca3af; }
+.charge-total {
+  margin-top: 16px; padding: 14px 16px;
+  background: #1a1a2e; border-radius: 12px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.charge-total-label { font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.7); }
+.charge-total-amount { font-size: 18px; font-weight: 700; color: white; }
+.ladder-badge {
+  margin-top: 12px; padding: 10px 14px; border-radius: 10px;
+  font-size: 12px; font-weight: 600;
+  display: flex; align-items: center; gap: 8px;
+}
+.ladder-badge.needed { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.ladder-badge.safe { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+.ladder-badge svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+/* ── Pricing Ref ── */
+.pricing-ref { margin-top: 20px; background: #f8faff; border: 1px solid #e8ecf2; border-radius: 12px; overflow: hidden; }
+.pricing-ref-header {
+  padding: 12px 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 13px; font-weight: 600; color: #374151; user-select: none;
+}
+.pricing-ref-header svg { width: 16px; height: 16px; transition: transform 0.2s; }
+.pricing-ref-header.open svg { transform: rotate(180deg); }
+.pricing-ref-body { display: none; padding: 0 16px 16px; }
+.pricing-ref-body.show { display: block; }
+.pricing-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.pricing-table th { text-align: left; padding: 8px 10px; color: #8896ab; font-weight: 600; border-bottom: 1px solid #e8ecf2; }
+.pricing-table td { padding: 8px 10px; color: #374151; border-bottom: 1px solid #f0f4f8; vertical-align: top; }
+.pricing-table tr:last-child td { border-bottom: none; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; background: #eef4ff; color: #2563eb; }
+
+/* ── Submit Button ── */
+.submit-wrap { display: flex; justify-content: center; }
+.btn-submit {
+  padding: 16px 48px;
+  background: linear-gradient(135deg, #5b9bf5, #2563eb);
+  color: white; border: none; border-radius: 16px;
+  font-size: 16px; font-weight: 700; cursor: pointer;
+  font-family: inherit;
+  display: flex; align-items: center; gap: 10px;
+  transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+}
+.btn-submit:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(37,99,235,0.35); }
+.btn-submit:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn-submit svg { width: 20px; height: 20px; }
+
+/* ── Extras (Home estimate panel) ── */
+.extra-costs-section { display: none; margin-bottom: 16px; }
+.ladder-truck-alert {
+  display: none; margin-top: 12px; padding: 10px 14px;
+  background: #fff8e6; border-radius: 10px;
+  border: 1px solid #fcd34d; font-size: 12px; color: #92400e;
 }
 
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
+/* ── Animations ── */
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 .animate { animation: fadeInUp 0.5s ease-out forwards; opacity: 0; }
 .delay-1 { animation-delay: 0.1s; }
 .delay-2 { animation-delay: 0.2s; }
 .delay-3 { animation-delay: 0.3s; }
 .delay-4 { animation-delay: 0.4s; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+.fade-up { animation: fadeUp 0.4s ease-out both; }
+
+@media (max-width: 700px) {
+  .content-grid { grid-template-columns: 1fr; }
+  .calc-grid { grid-template-columns: 1fr; }
+  .main, .upload-main { padding: 16px; }
+  .nav-links { display: none; }
+}
 </style>
 </head>
 <body>
@@ -433,305 +479,650 @@ body { font-family: 'Noto Sans KR', sans-serif; background: #f0f4f8; color: #1a1
   </div>
 </header>
 
-<main class="main">
-  <div class="hero-card animate delay-1">
-    <div class="hero-left">
-      <div class="hero-label">내 방 스캔하기</div>
-      <div class="hero-title">방을 촬영하고 자동으로<br/>이사 견적을 받아보세요</div>
-      <div class="hero-desc">스마트폰으로 실내를 촬영하면 AI가 자동으로 짐의 부피를 측정하고<br/>최적의 이사 견적을 제공합니다.</div>
-      <div class="hero-buttons">
-        <button id="uploadBtn" class="btn-hero secondary" type="button">
-          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          사진 선택
-        </button>
-        <button id="startBtn" class="btn-hero primary" type="button" disabled style="opacity:0.5;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          견적 시작
-        </button>
-        <input id="imageInput" type="file" accept=".jpg,.jpeg,.png,.webp" multiple style="display:none;" />
-        <div id="previewWrap" style="display:none; margin-top:12px; align-items:center; gap:12px;">
-          <img id="previewImg" style="width:80px; height:60px; object-fit:cover; border-radius:10px; border:2px solid rgba(255,255,255,0.4);" />
-          <span id="previewName" style="font-size:13px; opacity:0.9;"></span>
-        </div>
-      </div>
-      <div style="margin-top:20px; display:flex; gap:16px; flex-wrap:wrap;">
-        <div style="display:flex; flex-direction:column; gap:8px; background:rgba(255,255,255,0.1); padding:12px; border-radius:12px;">
-          <span style="font-size:12px; opacity:0.85; font-weight:600;">📦 출발지</span>
-          <div style="display:flex; gap:8px;">
-            <div style="display:flex; flex-direction:column; gap:4px;">
-              <label style="font-size:11px; opacity:0.75;">엘리베이터</label>
-              <select id="fromElevator" style="padding:7px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.3); background:rgba(255,255,255,0.18); color:white; font-family:inherit; font-size:12px;">
-                <option value="true">있음</option>
-                <option value="false">없음</option>
-              </select>
-            </div>
-            <div style="display:flex; flex-direction:column; gap:4px;">
-              <label style="font-size:11px; opacity:0.75;">층수</label>
-              <input id="fromFloor" type="number" min="1" max="50" value="1" style="padding:7px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.3); background:rgba(255,255,255,0.18); color:white; font-family:inherit; font-size:12px; width:70px;" />
-            </div>
-          </div>
-        </div>
-        <div style="display:flex; flex-direction:column; gap:8px; background:rgba(255,255,255,0.1); padding:12px; border-radius:12px;">
-          <span style="font-size:12px; opacity:0.85; font-weight:600;">🏠 도착지</span>
-          <div style="display:flex; gap:8px;">
-            <div style="display:flex; flex-direction:column; gap:4px;">
-              <label style="font-size:11px; opacity:0.75;">엘리베이터</label>
-              <select id="toElevator" style="padding:7px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.3); background:rgba(255,255,255,0.18); color:white; font-family:inherit; font-size:12px;">
-                <option value="true">있음</option>
-                <option value="false">없음</option>
-              </select>
-            </div>
-            <div style="display:flex; flex-direction:column; gap:4px;">
-              <label style="font-size:11px; opacity:0.75;">층수</label>
-              <input id="toFloor" type="number" min="1" max="50" value="1" style="padding:7px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.3); background:rgba(255,255,255,0.18); color:white; font-family:inherit; font-size:12px; width:70px;" />
-            </div>
-          </div>
-        </div>
-        <div style="display:flex; flex-direction:column; gap:8px; background:rgba(255,255,255,0.1); padding:12px; border-radius:12px;">
-          <span style="font-size:12px; opacity:0.85; font-weight:600;">🚛 이사 거리</span>
-          <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
-            <label style="font-size:11px; opacity:0.75;">거리 (km)</label>
-            <input id="distanceInput" type="number" min="1" value="10" style="padding:7px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.3); background:rgba(255,255,255,0.18); color:white; font-family:inherit; font-size:12px; width:90px;" />
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="hero-right">
-      <div class="hero-img-placeholder">
-        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-      </div>
-      <div class="hero-img-placeholder" style="margin-top: 20px;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="7" width="20" height="10" rx="2"/><rect x="6" y="3" width="12" height="4" rx="1"/></svg>
-      </div>
-    </div>
-  </div>
+<!-- ════════════════════════ HOME VIEW ════════════════════════ -->
+<div id="viewHome">
+  <main class="main">
 
-  <div class="content-grid">
-    <div>
-      <div class="section-title animate delay-2">내 방 목록</div>
-      <div class="rooms-list">
-        <div class="room-card animate delay-2">
-          <div class="room-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#3b7ddd" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-          </div>
-          <div class="room-info">
-            <div class="room-name">안산 고잔동 사무실</div>
-            <div class="room-meta">물체 15개 감지 · 3.2m³ · 2025.03.14</div>
-          </div>
-          <div class="room-photos">
-            <div class="room-photo" style="background: linear-gradient(135deg, #c8d8f0, #a8c0e8);"></div>
-            <div class="room-photo" style="background: linear-gradient(135deg, #d0e0f4, #b0c8e8);"></div>
-            <div class="room-photo" style="background: linear-gradient(135deg, #c0d4ec, #98b8e0);"></div>
-          </div>
-          <div class="room-status done">완료</div>
+    <!-- Hero -->
+    <div class="hero-card animate delay-1">
+      <div class="hero-left">
+        <div class="hero-label">내 방 스캔하기</div>
+        <div class="hero-title">방을 촬영하고 자동으로<br/>이사 견적을 받아보세요</div>
+        <div class="hero-desc">스마트폰으로 실내를 촬영하면 AI가 자동으로 짐의 부피를 측정하고<br/>최적의 이사 견적을 제공합니다.</div>
+        <div class="hero-buttons">
+          <button id="goToUploadBtn" class="btn-hero primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><polyline points="9 12 11 14 15 10"/></svg>
+            이사 견적 확인하기
+          </button>
         </div>
-
-        <div class="room-card animate delay-3">
-          <div class="room-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#3b7ddd" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-          </div>
-          <div class="room-info">
-            <div class="room-name">우리 집</div>
-            <div class="room-meta">물체 12개 감지 · 2.1m³ · 2025.03.13</div>
-          </div>
-          <div class="room-photos">
-            <div class="room-photo" style="background: linear-gradient(135deg, #d4dce8, #b8c8dc);"></div>
-            <div class="room-photo" style="background: linear-gradient(135deg, #c8d4e4, #a8b8d4);"></div>
-          </div>
-          <div class="room-status done">완료</div>
+      </div>
+      <div class="hero-right">
+        <div class="hero-img-placeholder">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         </div>
-
-        <div class="add-room animate delay-4">
-          <div class="add-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#8896ab" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          </div>
-          <div class="add-text">새 방 추가하기</div>
+        <div class="hero-img-placeholder" style="margin-top:20px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="7" width="20" height="10" rx="2"/><rect x="6" y="3" width="12" height="4" rx="1"/></svg>
         </div>
       </div>
     </div>
 
-    <div>
-      <div class="estimate-panel animate delay-3">
-        <div class="estimate-header">
-          <div class="estimate-label">총 추정 부피</div>
-          <div class="estimate-volume"><span id="totalVolumeValue">-</span> <span class="estimate-unit">m³</span></div>
-          <div id="jobStatus" class="job-status">사진을 업로드하면 자동 분석이 시작됩니다.</div>
-        </div>
+    <!-- Content Grid -->
+    <div class="content-grid">
+      <!-- Left: Room List -->
+      <div>
+        <div class="section-title animate delay-2">내 방 목록</div>
+        <div class="rooms-list" id="roomsList">
 
-        <div class="estimate-stats">
-          <div class="stat-card">
-            <div class="stat-value" id="pipelineStatus">대기</div>
-            <div class="stat-label">파이프라인 상태</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="elapsedSec">-</div>
-            <div class="stat-label">처리 시간(초)</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="workersValue">-</div>
-            <div class="stat-label">예상 인력(명)</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="totalPriceValue">-</div>
-            <div class="stat-label">예상 총 비용</div>
-          </div>
-        </div>
-
-        <div class="estimate-section-title">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="8"/></svg>
-          예상 견적
-        </div>
-
-        <div class="transport-options">
-          <div id="recommendedCard" class="transport-card recommended">
-            <div id="recommendBadge" class="transport-badge">추천</div>
-            <div class="transport-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#3b7ddd" stroke-width="1.8" stroke-linecap="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+          <div class="room-card animate delay-2">
+            <div class="room-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#3b7ddd" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
             </div>
-            <div id="truckName" class="transport-name">-</div>
-            <div id="truckCount" class="transport-count">-</div>
-          </div>
-          <div class="transport-card">
-            <div class="transport-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#8896ab" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+            <div class="room-info">
+              <div class="room-name">안산 고잔동 사무실</div>
+              <div class="room-meta">3.2m³ · 2025.03.14</div>
             </div>
-            <div class="transport-name">업로드 방식</div>
-            <div class="transport-count">여러 이미지 일괄분석</div>
+            <div class="room-photos">
+              <div class="room-photo" style="background:linear-gradient(135deg,#c8d8f0,#a8c0e8);"></div>
+              <div class="room-photo" style="background:linear-gradient(135deg,#d0e0f4,#b0c8e8);"></div>
+              <div class="room-photo" style="background:linear-gradient(135deg,#c0d4ec,#98b8e0);"></div>
+            </div>
+            <div class="room-status done">완료</div>
+          </div>
+
+          <div class="room-card animate delay-3">
+            <div class="room-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#3b7ddd" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            </div>
+            <div class="room-info">
+              <div class="room-name">우리 집</div>
+              <div class="room-meta">2.1m³ · 2025.03.13</div>
+            </div>
+            <div class="room-photos">
+              <div class="room-photo" style="background:linear-gradient(135deg,#d4dce8,#b8c8dc);"></div>
+              <div class="room-photo" style="background:linear-gradient(135deg,#c8d4e4,#a8b8d4);"></div>
+            </div>
+            <div class="room-status done">완료</div>
+          </div>
+
+          <div class="add-room animate delay-4" id="addRoomCard">
+            <div class="add-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#8896ab" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </div>
+            <div class="add-text">새 방 추가하기</div>
           </div>
         </div>
+      </div>
 
-        <div class="estimate-section-title">분석 메모</div>
-        <div class="room-volumes">
-          <div class="volume-row">
-            <span class="volume-label">결과 항목</span>
-            <span class="volume-value">총 부피 + 추천 트럭</span>
+      <!-- Right: Estimate Panel -->
+      <div>
+        <div class="estimate-panel animate delay-3">
+          <div class="estimate-header">
+            <div class="estimate-label">총 추정 부피</div>
+            <div class="estimate-volume"><span id="totalVolumeValue">-</span> <span class="estimate-unit">m³</span></div>
+            <div id="jobStatus" class="job-status">견적 확인하기를 눌러 분석을 시작하세요.</div>
           </div>
-          <div class="volume-bar"><div id="progressBar" class="volume-fill" style="width: 5%;"></div></div>
-          <div class="volume-row">
-            <span class="volume-label">진행 단계</span>
-            <span id="stageText" class="volume-value">대기 중</span>
-          </div>
-          <div class="volume-bar"><div class="volume-fill" style="width: 100%; opacity: 0.25;"></div></div>
-        </div>
 
-        <div id="extraCostsSection" style="display:none; margin-bottom:16px;">
+          <div class="estimate-stats">
+            <div class="stat-card">
+              <div class="stat-value" id="pipelineStatus">대기</div>
+              <div class="stat-label">파이프라인 상태</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="elapsedSec">-</div>
+              <div class="stat-label">처리 시간(초)</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="workersValue">-</div>
+              <div class="stat-label">예상 인력(명)</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="totalPriceValue">-</div>
+              <div class="stat-label">예상 총 비용</div>
+            </div>
+          </div>
+
           <div class="estimate-section-title">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-            추가 비용 내역
+            <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            예상 견적
           </div>
-          <div id="extraCostsList"></div>
-          <div class="volume-row" style="margin-top:8px; border-top:1px solid #e8ecf2; padding-top:8px;">
-            <span class="volume-label" style="font-weight:600;">기본 비용</span>
-            <span class="volume-value" id="basePriceValue">-</span>
+
+          <div class="transport-options">
+            <div id="recommendedCard" class="transport-card recommended">
+              <div id="recommendBadge" class="transport-badge">추천</div>
+              <div class="transport-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#3b7ddd" stroke-width="1.8" stroke-linecap="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+              </div>
+              <div id="truckName" class="transport-name">-</div>
+              <div id="truckCount" class="transport-count">-</div>
+            </div>
+            <div class="transport-card">
+              <div class="transport-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#8896ab" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+              </div>
+              <div class="transport-name">업로드 방식</div>
+              <div class="transport-count">여러 이미지 일괄분석</div>
+            </div>
           </div>
-          <div class="volume-row">
-            <span class="volume-label" style="font-weight:600; color:#d97706;">추가 비용 합계</span>
-            <span class="volume-value" id="extraTotalValue" style="color:#d97706;">-</span>
+
+          <div class="estimate-section-title">분석 진행</div>
+          <div class="room-volumes">
+            <div class="volume-row">
+              <span class="volume-label">진행 단계</span>
+              <span id="stageText" class="volume-value">대기 중</span>
+            </div>
+            <div class="volume-bar"><div id="progressBar" class="volume-fill" style="width:5%;"></div></div>
           </div>
-          <div class="volume-row" style="border-top:2px solid #e8ecf2; padding-top:8px; margin-top:4px;">
-            <span class="volume-label" style="font-weight:700; font-size:14px;">총 예상 비용</span>
-            <span class="volume-value" style="font-size:16px;" id="grandTotalValue">-</span>
+
+          <div class="extra-costs-section" id="extraCostsSection">
+            <div class="estimate-section-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              추가 비용 내역
+            </div>
+            <div id="extraCostsList"></div>
+            <div class="volume-row" style="margin-top:8px;border-top:1px solid #e8ecf2;padding-top:8px;">
+              <span class="volume-label" style="font-weight:600;">기본 비용</span>
+              <span class="volume-value" id="basePriceValue">-</span>
+            </div>
+            <div class="volume-row">
+              <span class="volume-label" style="font-weight:600;color:#d97706;">추가 비용 합계</span>
+              <span class="volume-value" id="extraTotalValue" style="color:#d97706;">-</span>
+            </div>
+            <div class="volume-row" style="border-top:2px solid #e8ecf2;padding-top:8px;margin-top:4px;">
+              <span class="volume-label" style="font-weight:700;font-size:14px;">총 예상 비용</span>
+              <span class="volume-value" style="font-size:16px;" id="grandTotalValue">-</span>
+            </div>
+            <div class="ladder-truck-alert" id="ladderTruckAlert">
+              ⚠️ 사다리차가 필요합니다 (엘리베이터 없음, 4층 이상)
+            </div>
           </div>
-          <div id="ladderTruckAlert" style="display:none; margin-top:12px; padding:10px 14px; background:#fff8e6; border-radius:10px; border:1px solid #fcd34d; font-size:12px; color:#92400e;">
-            ⚠️ 사다리차가 필요합니다 (엘리베이터 없음, 4층 이상)
-          </div>
+
+          <button id="logBtn" class="btn-download" type="button">실행 로그 보기</button>
         </div>
-        <button id="logBtn" class="btn-download" type="button">실행 로그 보기</button>
       </div>
     </div>
+
+  </main>
+</div><!-- /viewHome -->
+
+
+<!-- ════════════════════════ UPLOAD VIEW ════════════════════════ -->
+<div id="viewUpload" style="display:none;">
+
+  <div class="upload-topbar">
+    <button class="back-btn" id="backBtn" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      홈으로 돌아가기
+    </button>
+    <div class="upload-topbar-title">이사 견적 확인하기</div>
   </div>
-</main>
+
+  <div class="upload-main">
+
+    <!-- STEP 1: 이미지 업로드 -->
+    <div class="upload-card fade-up">
+      <div class="up-section-badge">STEP 1</div>
+      <div class="up-section-title">방 사진 업로드</div>
+      <div class="up-section-sub">이사할 방의 사진을 업로드하면 AI가 가구 부피를 자동으로 분석합니다.</div>
+
+      <div class="guideline-box">
+        <div class="guideline-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div class="guideline-text">
+          <strong>촬영 가이드라인</strong>
+          소파, 침대, 옷장 등 큰 가구가 사진 가장자리에서 잘리지 않게 찍어주세요.
+        </div>
+      </div>
+
+      <div class="dropzone" id="dropzone">
+        <div class="dropzone-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#3b7ddd" stroke-width="1.8" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+        <div class="dropzone-title">사진을 여기에 끌어다 놓거나</div>
+        <div class="dropzone-sub">JPG, PNG, WEBP 형식 · 최대 20MB</div>
+        <button class="dropzone-btn" type="button" id="browseBtn">파일 선택</button>
+        <input id="fileInput" type="file" accept=".jpg,.jpeg,.png,.webp" multiple style="display:none;">
+      </div>
+
+      <div id="previewGrid" class="preview-grid" style="display:none;"></div>
+      <div id="previewCount" class="preview-count" style="display:none;"></div>
+    </div>
+
+    <!-- STEP 2: 이사 정보 & 추가비용 -->
+    <div class="upload-card fade-up" style="animation-delay:0.08s;">
+      <div class="up-section-badge">STEP 2</div>
+      <div class="up-section-title">이사 정보 & 추가비용 계산</div>
+      <div class="up-section-sub">층수와 엘리베이터 유무, 이사 거리를 입력하면 추가 비용을 실시간으로 확인할 수 있습니다.</div>
+
+      <div class="calc-grid">
+        <!-- 입력 폼 -->
+        <div>
+          <div class="field-group">
+            <div class="field-label">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              출발지
+            </div>
+            <div class="location-box">
+              <div class="location-row">
+                <div class="field-wrap">
+                  <label>엘리베이터</label>
+                  <select id="fromElevator">
+                    <option value="true">있음</option>
+                    <option value="false">없음</option>
+                  </select>
+                </div>
+                <div class="field-wrap">
+                  <label>층수</label>
+                  <input id="fromFloor" type="number" min="1" max="99" value="1" placeholder="예: 3">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <div class="field-label">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+              도착지
+            </div>
+            <div class="location-box">
+              <div class="location-row">
+                <div class="field-wrap">
+                  <label>엘리베이터</label>
+                  <select id="toElevator">
+                    <option value="true">있음</option>
+                    <option value="false">없음</option>
+                  </select>
+                </div>
+                <div class="field-wrap">
+                  <label>층수</label>
+                  <input id="toFloor" type="number" min="1" max="99" value="1" placeholder="예: 5">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <div class="field-label">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+              이사 거리
+            </div>
+            <div class="distance-row">
+              <input id="distanceKm" type="number" min="1" max="9999" value="10" placeholder="예: 45">
+              <span>km</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 추가비용 패널 -->
+        <div>
+          <div class="charge-panel">
+            <div class="charge-panel-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              예상 추가비용 내역
+            </div>
+
+            <div class="charge-item">
+              <div class="charge-left">
+                <div class="charge-dot off" id="fromStairDot"></div>
+                <div>
+                  <div class="charge-name">계단 할증 (출발지)</div>
+                  <div class="charge-sub" id="fromStairSub">엘리베이터 있음</div>
+                </div>
+              </div>
+              <div class="charge-amount off" id="fromStairAmt">-</div>
+            </div>
+
+            <div class="charge-item">
+              <div class="charge-left">
+                <div class="charge-dot off" id="toStairDot"></div>
+                <div>
+                  <div class="charge-name">계단 할증 (도착지)</div>
+                  <div class="charge-sub" id="toStairSub">엘리베이터 있음</div>
+                </div>
+              </div>
+              <div class="charge-amount off" id="toStairAmt">-</div>
+            </div>
+
+            <div class="charge-item">
+              <div class="charge-left">
+                <div class="charge-dot off" id="ladderDot"></div>
+                <div>
+                  <div class="charge-name">사다리차</div>
+                  <div class="charge-sub" id="ladderSub">해당 없음</div>
+                </div>
+              </div>
+              <div class="charge-amount off" id="ladderAmt">-</div>
+            </div>
+
+            <div class="charge-item">
+              <div class="charge-left">
+                <div class="charge-dot off" id="distDot"></div>
+                <div>
+                  <div class="charge-name">장거리 할증</div>
+                  <div class="charge-sub" id="distSub">30km 이하</div>
+                </div>
+              </div>
+              <div class="charge-amount off" id="distAmt">-</div>
+            </div>
+
+            <div class="charge-total">
+              <div class="charge-total-label">예상 추가비용 합계</div>
+              <div class="charge-total-amount" id="upExtraTotal">-</div>
+            </div>
+
+            <div class="ladder-badge safe" id="ladderBadge">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+              사다리차 불필요
+            </div>
+          </div>
+
+          <div class="pricing-ref">
+            <div class="pricing-ref-header" id="pricingToggle">
+              <span>요금 기준 안내</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="pricing-ref-body" id="pricingBody">
+              <table class="pricing-table">
+                <thead>
+                  <tr><th>항목</th><th>조건</th><th>요금</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span class="tag">계단 할증</span></td>
+                    <td>엘리베이터 없음</td>
+                    <td>(층수-1) × ₩30,000 × 인력 수</td>
+                  </tr>
+                  <tr>
+                    <td><span class="tag" style="background:#fef2f2;color:#dc2626;">사다리차</span></td>
+                    <td>엘리베이터 없음 · 4층 이상</td>
+                    <td>₩300,000 고정</td>
+                  </tr>
+                  <tr>
+                    <td><span class="tag" style="background:#f5f3ff;color:#7c3aed;">장거리 할증</span></td>
+                    <td>30km 초과</td>
+                    <td>10km당 ₩50,000</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div style="margin-top:10px;font-size:11px;color:#8896ab;line-height:1.5;">
+                * 계단 할증의 인력 수는 사진 분석 후 부피 기반으로 확정됩니다.<br>
+                * 표시 금액은 최소 인력(2명) 기준의 최소 금액입니다.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 견적 분석 시작 버튼 -->
+    <div class="submit-wrap">
+      <button class="btn-submit" id="startBtn" type="button" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        견적 분석 시작
+      </button>
+    </div>
+
+  </div>
+</div><!-- /viewUpload -->
+
 
 <script>
-const imageInput = document.getElementById('imageInput');
-const uploadBtn = document.getElementById('uploadBtn');
-const scanBtn = document.getElementById('scanBtn');
-const statusEl = document.getElementById('jobStatus');
+/* ── View Switching ── */
+function showHome() {
+  document.getElementById('viewHome').style.display = '';
+  document.getElementById('viewUpload').style.display = 'none';
+}
+function showUpload() {
+  document.getElementById('viewHome').style.display = 'none';
+  document.getElementById('viewUpload').style.display = '';
+}
+document.getElementById('goToUploadBtn').addEventListener('click', showUpload);
+document.getElementById('addRoomCard').addEventListener('click', showUpload);
+document.getElementById('backBtn').addEventListener('click', showHome);
+
+/* ── Home Panel Elements ── */
+const jobStatusEl     = document.getElementById('jobStatus');
 const pipelineStatusEl = document.getElementById('pipelineStatus');
-const elapsedSecEl = document.getElementById('elapsedSec');
-const totalVolumeEl = document.getElementById('totalVolumeValue');
-const truckNameEl = document.getElementById('truckName');
-const truckCountEl = document.getElementById('truckCount');
-const stageTextEl = document.getElementById('stageText');
-const progressBar = document.getElementById('progressBar');
-const logBtn = document.getElementById('logBtn');
+const elapsedSecEl    = document.getElementById('elapsedSec');
+const totalVolumeEl   = document.getElementById('totalVolumeValue');
+const truckNameEl     = document.getElementById('truckName');
+const truckCountEl    = document.getElementById('truckCount');
+const stageTextEl     = document.getElementById('stageText');
+const progressBar     = document.getElementById('progressBar');
+const logBtn          = document.getElementById('logBtn');
 
 let currentJobId = null;
+let batchJobIds  = [];
+
+/* ── File Selection ── */
+const fileInput   = document.getElementById('fileInput');
+const browseBtn   = document.getElementById('browseBtn');
+const dropzone    = document.getElementById('dropzone');
+const previewGrid = document.getElementById('previewGrid');
+const previewCount = document.getElementById('previewCount');
+const startBtn    = document.getElementById('startBtn');
 let selectedFiles = [];
-let batchJobIds = [];
-let batchDoneCount = 0;
-let batchFailedCount = 0;
-let batchResults = [];
 
-function setStatus(text, isError = false) {
-  statusEl.textContent = text;
-  statusEl.style.color = isError ? '#b91c1c' : '#6b7280';
+browseBtn.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => { addFiles(Array.from(e.target.files || [])); fileInput.value = ''; });
+
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault(); dropzone.classList.remove('drag-over');
+  addFiles(Array.from(e.dataTransfer.files || []).filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f.name)));
+});
+dropzone.addEventListener('click', e => { if (e.target === browseBtn) return; fileInput.click(); });
+
+function addFiles(files) {
+  for (const f of files) {
+    if (!selectedFiles.find(x => x.name === f.name && x.size === f.size)) selectedFiles.push(f);
+  }
+  renderPreviews();
+  startBtn.disabled = selectedFiles.length === 0;
+}
+function removeFile(idx) {
+  selectedFiles.splice(idx, 1);
+  renderPreviews();
+  startBtn.disabled = selectedFiles.length === 0;
+}
+function renderPreviews() {
+  if (!selectedFiles.length) {
+    previewGrid.style.display = 'none';
+    previewCount.style.display = 'none';
+    return;
+  }
+  previewGrid.style.display = 'flex';
+  previewCount.style.display = 'block';
+  previewCount.textContent = `${selectedFiles.length}장 선택됨`;
+  previewGrid.innerHTML = '';
+  selectedFiles.forEach((f, i) => {
+    const item = document.createElement('div');
+    item.className = 'preview-item';
+    const img = document.createElement('img');
+    const reader = new FileReader();
+    reader.onload = ev => { img.src = ev.target.result; };
+    reader.readAsDataURL(f);
+    const btn = document.createElement('button');
+    btn.className = 'preview-remove';
+    btn.textContent = '×';
+    btn.addEventListener('click', e => { e.stopPropagation(); removeFile(i); });
+    item.appendChild(img); item.appendChild(btn);
+    previewGrid.appendChild(item);
+  });
 }
 
-function stageToPercent(stage) {
-  if (!stage) return 5;
-  if (stage.includes('1/7')) return 20;
-  if (stage.includes('2-5/7')) return 55;
-  if (stage.includes('6/7')) return 78;
-  if (stage.includes('7/7')) return 90;
-  if (stage.includes('done')) return 100;
-  if (stage.includes('failed')) return 100;
-  return 12;
+/* ── Pricing Reference Toggle ── */
+document.getElementById('pricingToggle').addEventListener('click', function() {
+  this.classList.toggle('open');
+  document.getElementById('pricingBody').classList.toggle('show');
+});
+
+/* ── Live Estimate ── */
+let estimateTimer = null;
+function scheduleEstimate() {
+  clearTimeout(estimateTimer);
+  estimateTimer = setTimeout(fetchEstimate, 300);
+}
+['fromElevator','fromFloor','toElevator','toFloor','distanceKm'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('change', scheduleEstimate);
+  el.addEventListener('input', scheduleEstimate);
+});
+
+async function fetchEstimate() {
+  const body = {
+    from_elevator: document.getElementById('fromElevator').value === 'true',
+    from_floor: parseInt(document.getElementById('fromFloor').value) || 1,
+    to_elevator: document.getElementById('toElevator').value === 'true',
+    to_floor: parseInt(document.getElementById('toFloor').value) || 1,
+    distance_km: parseFloat(document.getElementById('distanceKm').value) || 10,
+    total_volume_m3: 0,
+  };
+  try {
+    const res = await fetch('/api/estimate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!res.ok) return;
+    renderEstimatePanel(await res.json(), body);
+  } catch (_) {}
 }
 
-function stageToKorean(stage) {
-  if (!stage) return '대기 중';
-  return stage
-    .replace('segmentation', '세그멘테이션')
-    .replace('depth', '깊이 추정')
-    .replace('cropping', '크롭')
-    .replace('completion', '완성')
-    .replace('elevation', '고도')
-    .replace('reconstruction', '3D 재구성')
-    .replace('scene alignment', '장면 정렬')
-    .replace('finishing', '마무리')
-    .replace('done', '완료')
-    .replace('failed', '실패');
-}
+function renderEstimatePanel(data, inputs) {
+  const extras = data.extra_costs || [];
+  const find = kw => extras.find(e => e.item.includes(kw));
 
-async function fetchJson(url, options = {}) {
-  const res = await fetch(url, options);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
-  return data;
-}
+  const fromStair = find('출발지 계단');
+  setCharge('fromStair', fromStair,
+    `${inputs.from_floor}층 · 엘리베이터 ${inputs.from_elevator ? '있음' : '없음'}`, 'stair');
 
-async function startBatchJobs(files) {
-  const form = new FormData();
-  for (const file of files) form.append('images', file);
-  form.append('from_elevator', document.getElementById('fromElevator').value);
-  form.append('from_floor', document.getElementById('fromFloor').value);
-  form.append('to_elevator', document.getElementById('toElevator').value);
-  form.append('to_floor', document.getElementById('toFloor').value);
-  form.append('distance_km', document.getElementById('distanceInput').value);
-  const data = await fetchJson('/api/jobs/batch', { method: 'POST', body: form });
-  return data.jobs || [];
-}
+  const toStair = find('도착지 계단');
+  setCharge('toStair', toStair,
+    `${inputs.to_floor}층 · 엘리베이터 ${inputs.to_elevator ? '있음' : '없음'}`, 'stair');
 
-async function waitForSingleJob(jobId, index, totalCount) {
-  while (true) {
-    try {
-      const state = await fetchJson(`/api/jobs/${jobId}`);
-      const stageK = stageToKorean(state.stage);
-      stageTextEl.textContent = `${index}/${totalCount} ${stageK}`;
-      progressBar.style.width = `${Math.max(5, Math.round((((index - 1) + stageToPercent(state.stage) / 100) / totalCount) * 100))}%`;
+  const ladder = find('사다리차');
+  setCharge('ladder', ladder,
+    ladder ? '엘리베이터 없음 · 4층 이상' : '해당 없음', 'ladder');
 
-      if (typeof state.elapsed_sec === 'number') elapsedSecEl.textContent = state.elapsed_sec.toFixed(1);
-      if (state.status === 'failed') return null;
-      if (state.status === 'done') return await fetchJson(`/api/jobs/${jobId}/result`);
-    } catch (_) {
-      return null;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+  const dist = find('장거리');
+  setCharge('dist', dist,
+    inputs.distance_km > 30 ? `${inputs.distance_km}km · 30km 초과 할증` : `${inputs.distance_km}km · 30km 이하`, 'dist');
+
+  const total = data.total_extra_cost || 0;
+  document.getElementById('upExtraTotal').textContent = total > 0 ? `+${total.toLocaleString()}원` : '없음';
+
+  const badge = document.getElementById('ladderBadge');
+  if (data.needs_ladder_truck) {
+    badge.className = 'ladder-badge needed';
+    badge.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> 사다리차 필요`;
+  } else {
+    badge.className = 'ladder-badge safe';
+    badge.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg> 사다리차 불필요`;
   }
 }
 
-function renderSummaryResult(result, aggregateMeta = null) {
+function setCharge(prefix, item, sub, activeClass) {
+  const dot = document.getElementById(`${prefix}Dot`);
+  const subEl = document.getElementById(`${prefix}Sub`);
+  const amt = document.getElementById(`${prefix}Amt`);
+  subEl.textContent = sub;
+  if (item) {
+    dot.className = `charge-dot ${activeClass}`;
+    amt.className = `charge-amount ${activeClass}`;
+    amt.textContent = `+${item.amount.toLocaleString()}원`;
+  } else {
+    dot.className = 'charge-dot off';
+    amt.className = 'charge-amount off';
+    amt.textContent = '-';
+  }
+}
+
+/* ── Submit: go to home then poll ── */
+startBtn.addEventListener('click', async () => {
+  if (!selectedFiles.length) return;
+
+  const files = [...selectedFiles];
+  const fromElevatorVal = document.getElementById('fromElevator').value;
+  const fromFloorVal    = document.getElementById('fromFloor').value;
+  const toElevatorVal   = document.getElementById('toElevator').value;
+  const toFloorVal      = document.getElementById('toFloor').value;
+  const distKmVal       = document.getElementById('distanceKm').value;
+
+  // Reset selection and navigate home
+  selectedFiles = [];
+  renderPreviews();
+  startBtn.disabled = true;
+  showHome();
+
+  // Show running state in home panel
+  setHomeStatus('업로드 중...');
+  pipelineStatusEl.textContent = '실행중';
+  progressBar.style.width = '5%';
+  stageTextEl.textContent = '시작 중...';
+
+  // Add pending room card
+  const pendingCard = addRoomCard(files, null);
+
+  try {
+    const form = new FormData();
+    for (const f of files) form.append('images', f);
+    form.append('from_elevator', fromElevatorVal);
+    form.append('from_floor', fromFloorVal);
+    form.append('to_elevator', toElevatorVal);
+    form.append('to_floor', toFloorVal);
+    form.append('distance_km', distKmVal);
+
+    const res = await fetchJson('/api/jobs/batch', { method: 'POST', body: form });
+    batchJobIds = (res.jobs || []).map(j => j.job_id);
+    if (!batchJobIds.length) throw new Error('생성된 작업이 없습니다.');
+
+    let doneCount = 0, failCount = 0;
+    for (let i = 0; i < batchJobIds.length; i++) {
+      const jobId = batchJobIds[i];
+      currentJobId = jobId;
+      const result = await waitJob(jobId, i + 1, batchJobIds.length);
+      if (result) doneCount++;
+      else failCount++;
+    }
+
+    if (doneCount > 0) {
+      const agg = await fetchJson('/api/jobs/batch/aggregate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_ids: batchJobIds }),
+      });
+      renderHomeSummary(agg.summary, agg);
+      updateRoomCard(pendingCard, files, agg.summary, 'done');
+      setHomeStatus(`배치 분석 완료 (성공 ${doneCount}건${failCount ? ', 실패 '+failCount+'건' : ''})`);
+      pipelineStatusEl.textContent = failCount > 0 ? '부분완료' : '완료';
+    } else {
+      setHomeStatus('분석에 실패했습니다.', true);
+      pipelineStatusEl.textContent = '실패';
+      updateRoomCard(pendingCard, files, null, 'failed');
+    }
+  } catch (err) {
+    setHomeStatus(`오류: ${err.message}`, true);
+    pipelineStatusEl.textContent = '실패';
+    updateRoomCard(pendingCard, files, null, 'failed');
+  }
+  progressBar.style.width = '100%';
+});
+
+async function waitJob(jobId, idx, total) {
+  while (true) {
+    try {
+      const state = await fetchJson(`/api/jobs/${jobId}`);
+      const frac = stageToFrac(state.stage);
+      const pct = Math.round(((idx - 1 + frac) / total) * 100);
+      stageTextEl.textContent = `${idx}/${total} · ${stageToKo(state.stage)}`;
+      progressBar.style.width = `${Math.max(5, pct)}%`;
+      if (typeof state.elapsed_sec === 'number') elapsedSecEl.textContent = state.elapsed_sec.toFixed(1);
+      if (state.status === 'failed') return null;
+      if (state.status === 'done') return fetchJson(`/api/jobs/${jobId}/result`);
+    } catch (_) { return null; }
+    await new Promise(r => setTimeout(r, 2000));
+  }
+}
+
+function renderHomeSummary(result, agg) {
   totalVolumeEl.textContent = Number(result.total_volume_m3 || 0).toFixed(2);
   if (result.recommended_truck_ton !== null) {
     truckNameEl.textContent = `${result.recommended_truck_ton}톤 트럭`;
@@ -741,122 +1132,132 @@ function renderSummaryResult(result, aggregateMeta = null) {
     truckNameEl.textContent = '10톤 이상';
     truckCountEl.textContent = `${n}대 필요`;
   }
-
   document.getElementById('workersValue').textContent = result.estimated_workers || '-';
+  document.getElementById('totalPriceValue').textContent = `${Math.round((result.total_estimated_price || 0) / 10000)}만원`;
   document.getElementById('basePriceValue').textContent = `${(result.base_price || 0).toLocaleString()}원`;
   document.getElementById('extraTotalValue').textContent = `+${(result.total_extra_cost || 0).toLocaleString()}원`;
   document.getElementById('grandTotalValue').textContent = `${(result.total_estimated_price || 0).toLocaleString()}원`;
-  document.getElementById('totalPriceValue').textContent = `${Math.round((result.total_estimated_price || 0) / 10000)}만원`;
+
+  const extraCostsList = document.getElementById('extraCostsList');
+  const volumeLog = agg && agg.volume_breakdown
+    ? `<div style="font-size:12px;color:#2563eb;background:#eef4ff;border:1px solid #c7dbff;border-radius:8px;padding:10px;margin-bottom:8px;">
+        <div style="font-weight:600;margin-bottom:6px;">사진별 부피 로그</div>
+        ${(agg.volume_breakdown || []).map(v => `<div>${v.image_name || v.job_id}: ${Number(v.volume_m3||0).toFixed(4)}m³ (${Number(v.elapsed_sec||0).toFixed(1)}초)</div>`).join('')}
+        <div style="margin-top:6px;font-weight:700;">총합: ${Number(agg.volume_total_m3||0).toFixed(4)}m³</div>
+      </div>` : '';
+  extraCostsList.innerHTML = volumeLog + ((result.extra_costs || []).map(c =>
+    `<div class="volume-row"><span class="volume-label">${c.item}</span><span class="volume-value" style="color:#d97706;">+${c.amount.toLocaleString()}원</span></div>`
+  ).join('') || '<div style="font-size:12px;color:#8896ab;text-align:center;padding:8px;">추가 비용 없음</div>');
 
   document.getElementById('extraCostsSection').style.display = 'block';
   document.getElementById('ladderTruckAlert').style.display = result.needs_ladder_truck ? 'block' : 'none';
-  const volumeLogHtml = aggregateMeta && aggregateMeta.volume_breakdown
-    ? `<div style="font-size:12px; color:#2563eb; background:#eef4ff; border:1px solid #c7dbff; border-radius:8px; padding:10px; margin-bottom:8px;">
-        <div style="font-weight:600; margin-bottom:6px;">사진별 부피 로그</div>
-        ${(aggregateMeta.volume_breakdown || []).map((v) =>
-          `<div>${v.image_name || v.job_id}: ${Number(v.volume_m3 || 0).toFixed(4)}m³ (${Number(v.elapsed_sec || 0).toFixed(1)}초)</div>`
-        ).join('')}
-        <div style="margin-top:6px; font-weight:700;">총합: ${Number(aggregateMeta.volume_total_m3 || 0).toFixed(4)}m³ / 총 처리시간: ${Number(aggregateMeta.elapsed_total_sec || 0).toFixed(1)}초</div>
-      </div>`
-    : '';
-  document.getElementById('extraCostsList').innerHTML = volumeLogHtml + (result.extra_costs || []).map((c) =>
-    `<div class="volume-row"><span class="volume-label">${c.item}</span><span class="volume-value" style="color:#d97706;">+${c.amount.toLocaleString()}원</span></div>`
-  ).join('') || '<div style="font-size:12px; color:#8896ab; text-align:center; padding:8px;">추가 비용 없음</div>';
+  if (agg && agg.elapsed_total_sec) elapsedSecEl.textContent = Number(agg.elapsed_total_sec).toFixed(1);
 }
 
-uploadBtn.addEventListener('click', () => imageInput.click());
-imageInput.addEventListener('change', (e) => {
-  const files = e.target.files ? Array.from(e.target.files) : [];
-  if (!files.length) return;
-  selectedFiles = files;
+/* ── Room Card ── */
+function addRoomCard(files, summary, statusClass = 'processing') {
+  const roomsList = document.getElementById('roomsList');
+  const addRoom   = document.getElementById('addRoomCard');
+  const today = new Date().toLocaleDateString('ko-KR', { year:'numeric', month:'2-digit', day:'2-digit' }).replace(/\. /g,'.').replace('.','');
+  const firstName = files[0]?.name || '새 방';
+  const stem = firstName.replace(/\.[^/.]+$/, '');
 
-  // 미리보기
-  const previewWrap = document.getElementById('previewWrap');
-  const previewImg = document.getElementById('previewImg');
-  const previewName = document.getElementById('previewName');
-  const startBtn = document.getElementById('startBtn');
+  const card = document.createElement('div');
+  card.className = 'room-card';
 
-  const reader = new FileReader();
-  reader.onload = (ev) => { previewImg.src = ev.target.result; };
-  reader.readAsDataURL(files[0]);
-  previewName.textContent = files.length === 1 ? files[0].name : `${files[0].name} 외 ${files.length - 1}장`;
-  previewWrap.style.display = 'flex';
+  // Build photo thumbnails (first 3 files)
+  const photosHtml = files.slice(0, 3).map(() =>
+    `<div class="room-photo" style="background:linear-gradient(135deg,#d0dcf0,#b0c4e8);"></div>`
+  ).join('');
 
-  startBtn.disabled = false;
-  startBtn.style.opacity = '1';
-  setStatus(`${files.length}장의 사진이 선택되었습니다. 견적 시작 버튼을 눌러주세요.`);
-  imageInput.value = '';
-});
+  card.innerHTML = `
+    <div class="room-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#3b7ddd" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    </div>
+    <div class="room-info">
+      <div class="room-name">${stem}</div>
+      <div class="room-meta" id="roomMeta_${stem}">분석 중... · ${today}</div>
+    </div>
+    <div class="room-photos">${photosHtml}</div>
+    <div class="room-status ${statusClass}" id="roomStatus_${stem}">${statusClass === 'processing' ? '처리중' : statusClass === 'done' ? '완료' : '실패'}</div>`;
 
-document.getElementById('startBtn').addEventListener('click', async () => {
-  if (!selectedFiles.length) {
-    setStatus('먼저 사진을 선택해주세요.', true);
-    return;
+  roomsList.insertBefore(card, addRoom);
+
+  // Attach real previews after insert
+  files.slice(0, 3).forEach((f, i) => {
+    const div = card.querySelectorAll('.room-photo')[i];
+    if (!div) return;
+    div.style.background = '';
+    const img = document.createElement('img');
+    const reader = new FileReader();
+    reader.onload = ev => { img.src = ev.target.result; };
+    reader.readAsDataURL(f);
+    div.appendChild(img);
+  });
+
+  return { card, stem, today };
+}
+
+function updateRoomCard(ref, files, summary, status) {
+  if (!ref) return;
+  const { card, stem, today } = ref;
+  const metaEl   = card.querySelector(`#roomMeta_${stem}`);
+  const statusEl = card.querySelector(`#roomStatus_${stem}`);
+  if (!metaEl || !statusEl) return;
+
+  if (status === 'done' && summary) {
+    const vol   = Number(summary.total_volume_m3 || 0).toFixed(2);
+    const price = (summary.total_estimated_price || 0).toLocaleString();
+    metaEl.textContent   = `${vol}m³ · ${price}원 · ${today}`;
+    statusEl.textContent = '완료';
+    statusEl.className   = 'room-status done';
+  } else {
+    metaEl.textContent   = `분석 실패 · ${today}`;
+    statusEl.textContent = '실패';
+    statusEl.className   = 'room-status failed';
   }
-  setStatus(`${selectedFiles.length}장 업로드 중...`);
-  const startBtn = document.getElementById('startBtn');
-  startBtn.disabled = true;
-  startBtn.style.opacity = '0.5';
-  try {
-    const jobs = await startBatchJobs(selectedFiles);
-    if (!jobs.length) throw new Error('생성된 작업이 없습니다.');
+}
 
-    batchJobIds = jobs.map((j) => j.job_id);
-    batchDoneCount = 0;
-    batchFailedCount = 0;
-    batchResults = [];
-    pipelineStatusEl.textContent = '실행중';
-    totalVolumeEl.textContent = '-';
-    truckNameEl.textContent = '-';
-    truckCountEl.textContent = '-';
-    stageTextEl.textContent = `0/${batchJobIds.length} 완료`;
-    progressBar.style.width = '5%';
+/* ── Helpers ── */
+function setHomeStatus(text, isError = false) {
+  jobStatusEl.textContent = text;
+  jobStatusEl.style.color = isError ? '#b91c1c' : '#6b7280';
+}
 
-    for (let i = 0; i < batchJobIds.length; i++) {
-      const jobId = batchJobIds[i];
-      currentJobId = jobId;
-      setStatus(`분석 진행 중... (${i + 1}/${batchJobIds.length})`);
-      const result = await waitForSingleJob(jobId, i + 1, batchJobIds.length);
-      if (result) {
-        batchDoneCount += 1;
-        batchResults.push(result);
-      } else {
-        batchFailedCount += 1;
-      }
-    }
+function stageToFrac(stage) {
+  if (!stage) return 0.05;
+  if (stage.includes('1/7')) return 0.2;
+  if (stage.includes('2-5')) return 0.55;
+  if (stage.includes('6/7')) return 0.78;
+  if (stage.includes('7/7')) return 0.9;
+  if (stage.includes('done')) return 1;
+  return 0.1;
+}
 
-    if (batchDoneCount > 0) {
-      const aggregate = await fetchJson('/api/jobs/batch/aggregate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_ids: batchJobIds }),
-      });
-      elapsedSecEl.textContent = Number(aggregate.elapsed_total_sec || 0).toFixed(1);
-      renderSummaryResult(aggregate.summary, aggregate);
-    }
+function stageToKo(stage) {
+  if (!stage) return '대기 중';
+  return stage
+    .replace('segmentation','세그멘테이션').replace('depth','깊이 추정')
+    .replace('cropping','크롭').replace('completion','완성')
+    .replace('elevation','고도').replace('reconstruction','3D 재구성')
+    .replace('scene alignment','장면 정렬').replace('finishing','마무리')
+    .replace('done','완료').replace('failed','실패');
+}
 
-    pipelineStatusEl.textContent = batchDoneCount > 0 ? (batchFailedCount > 0 ? '부분완료' : '완료') : '실패';
-    stageTextEl.textContent = `${batchDoneCount}/${batchJobIds.length} 완료`;
-    progressBar.style.width = '100%';
-    if (batchDoneCount > 0) {
-      setStatus(`배치 분석 완료: 성공 ${batchDoneCount}건, 실패 ${batchFailedCount}건`);
-    } else {
-      setStatus('배치 분석에 실패했습니다.', true);
-    }
-  } catch (err) {
-    setStatus(`업로드 실패: ${err.message}`, true);
-  }
-  startBtn.disabled = false;
-  startBtn.style.opacity = '1';
-});
+async function fetchJson(url, options = {}) {
+  const res  = await fetch(url, options);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+  return data;
+}
 
 logBtn.addEventListener('click', () => {
-  if (!currentJobId) {
-    setStatus('먼저 이미지를 업로드해 주세요.');
-    return;
-  }
+  if (!currentJobId) { setHomeStatus('먼저 이미지를 업로드해 주세요.'); return; }
   window.open(`/api/jobs/${currentJobId}/log`, '_blank');
 });
+
+// 초기 추정 실행 (upload view 처음 열릴 때도 보이도록)
+fetchEstimate();
 </script>
 </body>
 </html>

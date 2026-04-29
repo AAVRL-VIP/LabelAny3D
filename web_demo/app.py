@@ -45,6 +45,15 @@ class BatchAggregateRequest(BaseModel):
     job_ids: List[str]
 
 
+class EstimateRequest(BaseModel):
+    from_elevator: bool = True
+    from_floor: int = 1
+    to_elevator: bool = True
+    to_floor: int = 1
+    distance_km: float = 10.0
+    total_volume_m3: float = 0.0
+
+
 def _safe_stem(name: str) -> str:
     stem = Path(name).stem
     cleaned = re.sub(r"[^a-zA-Z0-9_-]+", "_", stem).strip("_")
@@ -511,6 +520,20 @@ def get_batch_aggregate(req: BatchAggregateRequest):
         ) + f" = 총 {round(total_volume, 4):.4f}m³",
         "summary": summary,
     }
+
+
+@app.post("/api/estimate")
+def estimate_cost(req: EstimateRequest):
+    return _compute_summary_from_total_volume(
+        total_volume=req.total_volume_m3,
+        one_ton_capacity_m3=DEFAULT_ONE_TON_CAPACITY_M3,
+        fill_rate=DEFAULT_FILL_RATE,
+        from_elevator=req.from_elevator,
+        from_floor=req.from_floor,
+        to_elevator=req.to_elevator,
+        to_floor=req.to_floor,
+        distance_km=req.distance_km,
+    )
 
 
 @app.get("/api/jobs/{job_id}/log")
