@@ -152,12 +152,16 @@ def estimate_bbox(in_pc, cat_name=None, ground_equ=None, method='pca'):
 
     # Rotate the point cloud to align with the x-axis and z-axis
     rotated_pc_2 = rotate_y(yaw) @ rotated_pc.T
-    x_min, x_max = rotated_pc_2[0, :].min(), rotated_pc_2[0, :].max()
-    y_min, y_max = rotated_pc_2[1, :].min(), rotated_pc_2[1, :].max()
-    z_min, z_max = rotated_pc_2[2, :].min(), rotated_pc_2[2, :].max()
+
+    rotated_pc_2_np = rotated_pc_2.T
+    low, high = 2, 98
+
+    x_min, y_min, z_min = np.percentile(rotated_pc_2_np, low, axis=0)
+    x_max, y_max, z_max = np.percentile(rotated_pc_2_np, high, axis=0)
 
     dx, dy, dz = x_max - x_min, y_max - y_min, z_max - z_min
     cx, cy, cz = (x_min + x_max) / 2, (y_min + y_max) / 2, (z_min + z_max) / 2
+
 
     print(f"[{method}] dx={dx:.3f}, dy={dy:.3f}, dz={dz:.3f}")
 

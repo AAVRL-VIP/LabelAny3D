@@ -27,8 +27,8 @@ SKIP_SEG="${SKIP_SEG:-0}"
 KEEP_LABELS="${KEEP_LABELS:-}"
 USE_YOLO_SEG="${USE_YOLO_SEG:-0}"
 YOLO_SEG_MODEL="${YOLO_SEG_MODEL:-yoloe-26l-seg.pt}"
-YOLO_CONF="${YOLO_CONF:-0.45}"
-YOLO_IOU="${YOLO_IOU:-0.55}"
+YOLO_CONF="${YOLO_CONF:-0.35}"
+YOLO_IOU="${YOLO_IOU:-0.70}"
 YOLO_MAX_DET="${YOLO_MAX_DET:-300}"
 YOLO_CLASSES="${YOLO_CLASSES:-}"
 YOLO_CLASS_PRESET="${YOLO_CLASS_PRESET:-indoor}"
@@ -175,12 +175,13 @@ yolo_class_preset = os.environ.get("YOLO_CLASS_PRESET", "indoor").strip().lower(
 
 if not yolo_classes and yolo_class_preset == "indoor":
     yolo_classes = [
-        "chair", "table", "sofa", "bed", "desk",
+        "chair", "table", "sofa", "bed", "desk", "mattress",
         "cabinet", "shelf", "drawer", "tv", "monitor",
         "refrigerator", "microwave", "washing machine",
-        "oven", "bench",
-        "blanket", "curtain", "fan", "storage_box", "box",
-        "air conditioner", "cooker",
+        "oven", "bench", "furniture", "couch", "bookcase", 
+        "blanket", "fan", "storage_box", "box", "closet", 
+        "air conditioner", "cooker", "wardrobe", "dresser",
+        "pantry shelf", "piano", "coffee table", "low table", "television"
     ]
 furniture_keywords = {
     # 소파/의자류

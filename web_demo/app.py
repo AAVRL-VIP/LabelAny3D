@@ -27,7 +27,7 @@ DEFAULT_GPU_IDX = 0
 DEFAULT_OBJ_REC = "amodal3r"
 DEFAULT_USE_YOLO_SEG = 1
 DEFAULT_ONE_TON_CAPACITY_M3 = 6.0
-DEFAULT_FILL_RATE = 0.6
+DEFAULT_FILL_RATE = 0.8
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 JOBS_DIR.mkdir(parents=True, exist_ok=True)

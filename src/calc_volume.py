@@ -23,8 +23,8 @@ def parse_args():
     parser.add_argument(
         "--fill-rate",
         type=float,
-        default=0.6,
-        help="Conservative packing factor in [0, 1]. Default: 0.6",
+        default=0.8,
+        help="Conservative packing factor in [0, 1]. Default: 0.8",
     )
     return parser.parse_args()
 
