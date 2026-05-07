@@ -279,11 +279,38 @@ for i, m in enumerate(masks):
     if m.sum() < min_mask_area:
         continue
     # 경계에 걸친 마스크 제외
-    is_truncated = (
-        m[0, :].any() or m[-1, :].any() or
-        m[:, 0].any() or m[:, -1].any()
-    )
-    if is_truncated:
+    ys, xs = np.where(m > 0)
+    if len(xs) == 0:
+        continue
+
+    x1, x2 = int(xs.min()), int(xs.max())
+    y1, y2 = int(ys.min()), int(ys.max())
+
+    # 너무 많이 경계에 걸친 마스크만 제외
+    border_px = int(os.environ.get("BORDER_PX", "20"))
+    max_border_ratio = float(os.environ.get("MAX_BORDER_RATIO", "0.20"))
+
+    border_region = np.zeros_like(m, dtype=bool)
+    border_region[:border_px, :] = True
+    border_region[-border_px:, :] = True
+    border_region[:, :border_px] = True
+    border_region[:, -border_px:] = True
+
+    mask_bool = m.astype(bool)
+    mask_area = float(mask_bool.sum())
+    border_area = float((mask_bool & border_region).sum())
+    border_ratio = border_area / max(mask_area, 1.0)
+
+    touch_left = x1 <= 0
+    touch_right = x2 >= W - 1
+    touch_top = y1 <= 0
+    touch_bottom = y2 >= H - 1
+    touch_count = sum([touch_left, touch_right, touch_top, touch_bottom])
+
+    # 삭제 조건:
+    # 1) 경계 근처에 mask 면적이 너무 많거나
+    # 2) 이미지 코너/여러 경계에 심하게 걸린 경우
+    if border_ratio > max_border_ratio and touch_count >= 2:
         continue
     ys, xs = np.where(m > 0)
     if len(xs) == 0:
