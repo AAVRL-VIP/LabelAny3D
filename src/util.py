@@ -288,7 +288,7 @@ def draw_cube(scene_dir, is_ground=False):
     output_file = 'vis_3dbox.png' if is_ground else 'vis_3dbox_no_ground.png'
     cv2.imwrite(os.path.join(scene_dir, output_file), image)
 
-def analyze_mask(mask, image_size, scale_threshold=1, boundary_threshold=1):
+def analyze_mask(mask, image_size, scale_threshold=1, boundary_threshold=1, truncation_ratio_threshold=0.01):
     """
     Analyzes a binary mask for scale and boundary truncation.
     """
@@ -320,10 +320,11 @@ def analyze_mask(mask, image_size, scale_threshold=1, boundary_threshold=1):
     left_intersection = np.sum(mask * left_boundary)
     right_intersection = np.sum(mask * right_boundary)
 
-    # Total boundary truncation
+    # Treat the object as truncated when enough of its own mask touches the image boundary.
     total_truncation = top_intersection + bottom_intersection + left_intersection + right_intersection
+    truncation_ratio = total_truncation / max(scale, 1)
 
-    return total_truncation >= 100, scale >= scale_threshold
+    return truncation_ratio >= truncation_ratio_threshold, scale >= scale_threshold
 
 def get_maximum_height(binary_mask):
     # Find rows containing the object
@@ -478,6 +479,15 @@ def align_to_depth_match(mask, depth_map, object_name, project_root, model):
     if not overlap_mask.any():
         print("No overlap between masks found")
         return np.eye(4)
+
+    erode_iter = int(os.environ.get("DEPTH_MATCH_ERODE", "3"))
+    if erode_iter > 0:
+        # Original:
+        # overlap_mask = mask & render_mask
+        kernel = np.ones((3, 3), dtype=np.uint8)
+        eroded = cv2.erode(overlap_mask.astype(np.uint8), kernel, iterations=erode_iter).astype(bool)
+        if eroded.any():
+            overlap_mask = eroded
         
     # Get depth values in overlapping region
     depth_map_values = depth_map[overlap_mask]
@@ -485,8 +495,31 @@ def align_to_depth_match(mask, depth_map, object_name, project_root, model):
     
     # Calculate scale factor between the two depth maps
     # Using median ratio to be robust to outliers
-    depth_ratios = depth_map_values / depth_render_values
-    scale = np.median(depth_ratios)
+    # Original:
+    # depth_ratios = depth_map_values / depth_render_values
+    # scale = np.median(depth_ratios)
+    valid = (
+        np.isfinite(depth_map_values) &
+        np.isfinite(depth_render_values) &
+        (depth_map_values > 0) &
+        (depth_render_values > 0)
+    )
+    if not valid.any():
+        print("No valid depth values for scale matching")
+        return np.eye(4)
+
+    depth_ratios = depth_map_values[valid] / depth_render_values[valid]
+    lo, hi = np.percentile(depth_ratios, [10, 90])
+    trimmed_ratios = depth_ratios[(depth_ratios >= lo) & (depth_ratios <= hi)]
+    if trimmed_ratios.size == 0:
+        trimmed_ratios = depth_ratios
+
+    scale_percentile = float(os.environ.get("DEPTH_MATCH_PERCENTILE", "35"))
+    scale = np.percentile(trimmed_ratios, scale_percentile)
+    print(
+        f"[depth-match] {object_name}: scale={scale:.4f}, "
+        f"percentile={scale_percentile:g}, samples={trimmed_ratios.size}/{depth_ratios.size}"
+    )
     
     # Create transformation matrix with scale
     transform = np.eye(4)

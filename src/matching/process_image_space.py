@@ -14,8 +14,14 @@ from matching.renderer import GLBRenderer
 from matching.matcher import ImageMatcher
 from matching.pose_estimator import PoseEstimator
 
-def setup_device():
+def setup_device(device=None):
     """Setup CUDA device if available"""
+    if device is not None:
+        device = torch.device(device)
+        if device.type == "cuda":
+            torch.cuda.set_device(device)
+        return device
+
     if torch.cuda.is_available():
         device = torch.device("cuda:0")
         torch.cuda.set_device(device)
@@ -31,10 +37,19 @@ def load_model(device):
     return model
 
 
-def process_object(object_name, project_root, model):
+def _model_device(model):
+    try:
+        return next(model.parameters()).device
+    except StopIteration:
+        return torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+
+def process_object(object_name, project_root, model, device=None):
     """Main processing pipeline for a single object"""
     # Setup
-    device = setup_device()
+    # Original:
+    # device = setup_device()
+    device = setup_device(device if device is not None else _model_device(model))
     
     # Initialize components
     renderer = GLBRenderer(device)

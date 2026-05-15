@@ -42,7 +42,7 @@ def main():
     with bbox_path.open(encoding="utf-8") as f:
         bboxes = json.load(f)
 
-    print(f"{'obj_id':<20} {'dx(m)':>8} {'dy(m)':>8} {'dz(m)':>8} {'volume(m^3)':>12}")
+    print(f"{'obj_id':<20} {'depth(m)':>9} {'height(m)':>9} {'width(m)':>9} {'volume(m^3)':>12}")
     print("-" * 64)
 
     total_volume = 0.0
@@ -50,11 +50,11 @@ def main():
         dims = obj.get("dimensions", [0.0, 0.0, 0.0])
         if len(dims) != 3:
             continue
-        dx, dy, dz = float(dims[0]), float(dims[1]), float(dims[2])
+        depth, height, width = float(dims[0]), float(dims[1]), float(dims[2])
         oid = str(obj.get("obj_id", "unknown"))
-        vol = dx * dy * dz
+        vol = depth * height * width
         total_volume += vol
-        print(f"{oid:<20} {dx:>8.3f} {dy:>8.3f} {dz:>8.3f} {vol:>12.4f}")
+        print(f"{oid:<20} {depth:>9.3f} {height:>9.3f} {width:>9.3f} {vol:>12.4f}")
 
     print("-" * 64)
     print(f"{'TOTAL':<44} {total_volume:>12.4f} m^3")

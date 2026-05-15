@@ -67,7 +67,14 @@ def save_moge_data(image, points, depth, mask, save_path):
     save_ply(save_path / 'depth_scene_no_edge.ply', vertices, faces, vertex_colors)
 
 
-def align_depth(relative_depth, metric_depth, mask=None, min_samples=0.2, max_valid_depth=400.0):
+def align_depth(
+    relative_depth,
+    metric_depth,
+    mask=None,
+    min_samples=0.2,
+    max_valid_depth=20.0,
+    fit_intercept=True,
+):
     """
     Align scale-invariant depth to metric depth using RANSAC linear regression.
 
@@ -81,17 +88,36 @@ def align_depth(relative_depth, metric_depth, mask=None, min_samples=0.2, max_va
     Returns:
         Aligned metric depth map.
     """
+    # Original:
+    # regressor = RANSACRegressor(
+    #     estimator=LinearRegression(fit_intercept=False),
+    #     min_samples=min_samples
+    # )
     regressor = RANSACRegressor(
-        estimator=LinearRegression(fit_intercept=False),
+        estimator=LinearRegression(fit_intercept=fit_intercept),
         min_samples=min_samples
     )
 
-    valid = (~np.isinf(relative_depth)) & (metric_depth < max_valid_depth)
+    valid = (
+        np.isfinite(relative_depth) &
+        np.isfinite(metric_depth) &
+        (relative_depth > 0) &
+        (metric_depth > 0) &
+        (metric_depth < max_valid_depth)
+    )
     if mask is not None:
         valid &= mask
 
     if valid.sum() == 0:
         print("Warning: No valid points for alignment. Returning metric depth.")
+        return metric_depth
+
+    metric_valid = metric_depth[valid]
+    lo, hi = np.percentile(metric_valid, [2, 98])
+    valid &= (metric_depth >= lo) & (metric_depth <= hi)
+
+    if valid.sum() == 0:
+        print("Warning: No valid points after depth trimming. Returning metric depth.")
         return metric_depth
 
     try:
@@ -106,12 +132,21 @@ def align_depth(relative_depth, metric_depth, mask=None, min_samples=0.2, max_va
     depth = np.full_like(relative_depth, 10000.0)
 
     if mask is not None:
-        masked_pred = regressor.predict(relative_depth[mask].reshape(-1, 1)).flatten()
-        depth[mask] = masked_pred
+        # Original:
+        # masked_pred = regressor.predict(relative_depth[mask].reshape(-1, 1)).flatten()
+        # depth[mask] = masked_pred
+        predict_mask = mask & np.isfinite(relative_depth) & (relative_depth > 0)
+        masked_pred = regressor.predict(relative_depth[predict_mask].reshape(-1, 1)).flatten()
+        depth[predict_mask] = masked_pred
     else:
-        valid_mask = ~np.isinf(relative_depth)
+        # Original:
+        # valid_mask = ~np.isinf(relative_depth)
+        valid_mask = np.isfinite(relative_depth) & (relative_depth > 0)
         masked_pred = regressor.predict(relative_depth[valid_mask].reshape(-1, 1)).flatten()
         depth[valid_mask] = masked_pred
+
+    depth = np.where(np.isfinite(depth), depth, metric_depth)
+    depth = np.maximum(depth, 0.01)
 
     return depth
 
@@ -125,6 +160,8 @@ if __name__ == "__main__":
     parser.add_argument("--split", help="split", default="val", type=str)
     parser.add_argument("--save_dir", help="save directory", default="../experimental_results/COCO/", type=str)
     parser.add_argument("--image_path", type=str, default="", help="single image path for single-image mode")
+    parser.add_argument("--max_valid_depth", type=float, default=float(os.environ.get("DEPTH_MAX_VALID", "20.0")))
+    parser.add_argument("--fit_intercept", type=int, default=int(os.environ.get("DEPTH_FIT_INTERCEPT", "1")))
 
     args, extras = parser.parse_known_args()
     opt = OmegaConf.merge(OmegaConf.load(args.config), OmegaConf.from_cli(extras))
@@ -227,7 +264,13 @@ if __name__ == "__main__":
                     f"mask={None if moge_mask is None else moge_mask.shape}"
                 )
 
-        depth_map = align_depth(moge_depth_map, pro_depth_map, mask=moge_mask)
+        depth_map = align_depth(
+            moge_depth_map,
+            pro_depth_map,
+            mask=moge_mask,
+            max_valid_depth=args.max_valid_depth,
+            fit_intercept=bool(args.fit_intercept),
+        )
         pts3d = depth_to_points(depth_map[None], K_img)
 
         save_moge_data(scene.image_np, pts3d, depth_map, moge_mask, out_dir)

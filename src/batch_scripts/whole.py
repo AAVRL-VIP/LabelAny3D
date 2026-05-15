@@ -32,6 +32,39 @@ from matching.process_image_space import load_model
 from batch_scripts.coconut_loader import CoconutLoader, get_dataset_paths
 
 
+def flatten_planar_object_depth(mask, depth_map, object_name, std_ratio_thresh=0.05):
+    if os.environ.get("PLANAR_DEPTH_FLATTEN", "1") != "1":
+        return depth_map
+
+    valid_mask = mask & np.isfinite(depth_map) & (depth_map > 0)
+    if valid_mask.sum() == 0:
+        return depth_map
+
+    # Original:
+    # transform = align_to_depth_match(mask, depth_map, obj_id, out_dir, mast3r_model)
+    z = depth_map[valid_mask]
+    z_mean = float(np.mean(z))
+    z_std = float(np.std(z))
+    z_ratio = z_std / (z_mean + 1e-6)
+
+    if z_ratio >= std_ratio_thresh:
+        print(
+            f"[planar-depth] {object_name}: keep depth "
+            f"std/mean={z_ratio:.4f} >= {std_ratio_thresh:.4f}"
+        )
+        return depth_map
+
+    z0 = float(np.median(z))
+    flattened_depth = depth_map.copy()
+    flattened_depth[valid_mask] = z0
+    print(
+        f"[planar-depth] {object_name}: flattened mask depth "
+        f"z0={z0:.4f}, std/mean={z_ratio:.4f} < {std_ratio_thresh:.4f}, "
+        f"pixels={int(valid_mask.sum())}"
+    )
+    return flattened_depth
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
@@ -172,7 +205,13 @@ if __name__ == "__main__":
                 continue
 
             try:
-                transform = align_to_depth_match(mask, depth_map, obj_id, out_dir, mast3r_model)
+                depth_for_align = flatten_planar_object_depth(
+                    mask,
+                    depth_map,
+                    obj_id,
+                    std_ratio_thresh=float(os.environ.get("PLANAR_DEPTH_STD_RATIO", "0.05")),
+                )
+                transform = align_to_depth_match(mask, depth_for_align, obj_id, out_dir, mast3r_model)
             except Exception as e:
                 print(f"Error aligning {obj_id}: {e}")
                 continue

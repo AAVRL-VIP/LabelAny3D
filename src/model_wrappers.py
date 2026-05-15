@@ -747,6 +747,221 @@ def run_yolo_seg(image, model_path="yoloe-26l-seg.pt", conf=0.2, iou=0.7, classe
 
 
 # =============================================================================
+# Grounded-SAM-2 - Open-Vocabulary Segmentation (Grounding DINO + SAM 2)
+# =============================================================================
+_DEFAULT_GSAM2_PROMPT = (
+    "sofa . couch . chair . dining chair . stool . bench . ottoman . futon . recliner . loveseat . "
+    "table . dining table . desk . tv stand . kitchen island . "
+    "cabinet . kitchen cabinet . drawer . drawer unit . shelf . bookcase . bookshelf . "
+    "wardrobe . closet . dresser . cupboard . locker . shoe rack . storage box . "
+    "bed . mattress . crib . "
+    "refrigerator . kimchi refrigerator . freezer . washing machine . dryer . dishwasher . "
+    "microwave . rice cooker . oven . stove . "
+    "television . tv . monitor . tv on stand . air conditioner . air purifier . vacuum . "
+    "piano . ironing board . bicycle"
+)
+
+def run_grounded_sam2(
+    image: np.ndarray,
+    text_prompt: str = _DEFAULT_GSAM2_PROMPT,
+    gdino_model: str = "auto",
+    gdino_config: str = None,
+    gdino_checkpoint: str = None,
+    sam2_checkpoint: str = None,
+    sam2_config: str = None,
+    box_threshold: float = 0.35,
+    text_threshold: float = 0.25,
+    nms_threshold: float = 0.5,
+    device: str = None,
+):
+    """
+    Run Grounded-SAM-2 (Grounding DINO + SAM 2) for open-vocabulary instance segmentation.
+
+    Args:
+        image:            RGB numpy array (H, W, 3)
+        text_prompt:      Period-separated labels, e.g. "sofa . bed . chair"
+        gdino_model:      "auto", "swinb", or "swint" when config/checkpoint are not passed
+        gdino_config:     Path to Grounding DINO config (auto-detected if None)
+        gdino_checkpoint: Path to Grounding DINO checkpoint (auto-detected if None)
+        sam2_checkpoint:  Path to sam2.1_hiera_large.pt (auto-detected if None)
+        sam2_config:      SAM 2 Hydra config name (relative to sam2 package configs/)
+        box_threshold:    Grounding DINO box confidence threshold
+        text_threshold:   Grounding DINO text matching threshold
+        device:           "cuda" / "cpu" (auto-detected if None)
+
+    Returns:
+        masks  : bool np.ndarray  [N, H, W]
+        labels : list[str]  length N
+    """
+    import sys
+    import os
+    import tempfile
+    import torch
+    from pathlib import Path
+    from PIL import Image as _PIL
+
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    # ── resolve paths ──────────────────────────────────────────────────────
+    here = Path(__file__).resolve().parent          # src/
+    gsam2_root = here.parent / "external" / "Grounded-SAM-2"
+
+    gdino_model = (gdino_model or "auto").strip().lower()
+    if gdino_model not in {"auto", "swinb", "swint"}:
+        raise ValueError("gdino_model must be one of: auto, swinb, swint")
+
+    gdino_config_dir = gsam2_root / "grounding_dino" / "groundingdino" / "config"
+    gdino_model_specs = {
+        "swinb": {
+            "config": gdino_config_dir / "GroundingDINO_SwinB_cfg.py",
+            "checkpoint_names": [
+                "groundingdino_swinb_cogcoor.pth",
+            ],
+        },
+        "swint": {
+            "config": gdino_config_dir / "GroundingDINO_SwinT_OGC.py",
+            "checkpoint_names": [
+                "groundingdino_swint_ogc.pth",
+            ],
+        },
+    }
+
+    def _find_checkpoint(names):
+        for dirname in ["checkpoints", "gdino_checkpoints"]:
+            for name in names:
+                candidate = gsam2_root / dirname / name
+                if candidate.exists():
+                    return candidate
+        return gsam2_root / "checkpoints" / names[0]
+
+    if gdino_config is None or gdino_checkpoint is None:
+        if gdino_model == "auto":
+            swinb_ckpt = _find_checkpoint(gdino_model_specs["swinb"]["checkpoint_names"])
+            selected_gdino_model = "swinb" if swinb_ckpt.exists() else "swint"
+        else:
+            selected_gdino_model = gdino_model
+        spec = gdino_model_specs[selected_gdino_model]
+        if gdino_config is None:
+            gdino_config = str(spec["config"])
+        if gdino_checkpoint is None:
+            gdino_checkpoint = str(_find_checkpoint(spec["checkpoint_names"]))
+    else:
+        selected_gdino_model = "custom"
+
+    if sam2_config is None:
+        sam2_config = "configs/sam2.1/sam2.1_hiera_l.yaml"
+    if sam2_checkpoint is None:
+        sam2_checkpoint = str(gsam2_root / "checkpoints" / "sam2.1_hiera_large.pt")
+
+    for p, label in [(gdino_config, "gdino_config"), (gdino_checkpoint, "gdino_checkpoint"),
+                     (sam2_checkpoint, "sam2_checkpoint")]:
+        if not Path(p).exists():
+            raise FileNotFoundError(
+                f"Grounded-SAM-2 file not found: {p}\n"
+                f"Run: bash external/setup_gsam2.sh  to install and download checkpoints."
+            )
+
+    # ── load / cache models ────────────────────────────────────────────────
+    model_key = f"gsam2::{gdino_checkpoint}::{sam2_checkpoint}"
+    if model_key not in _loaded_models:
+        # ensure gsam2_root is importable
+        for p in [str(gsam2_root), str(gsam2_root / "grounding_dino")]:
+            if p not in sys.path:
+                sys.path.insert(0, p)
+
+        from groundingdino.util.inference import load_model as _gdino_load
+        from sam2.build_sam import build_sam2
+        from sam2.sam2_image_predictor import SAM2ImagePredictor
+
+        print(f"[GSAM2] Loading Grounding DINO ({selected_gdino_model}): {gdino_checkpoint}")
+        gdino_model = _gdino_load(gdino_config, gdino_checkpoint, device=device)
+        gdino_model.eval()
+
+        print(f"[GSAM2] Loading SAM 2: {sam2_checkpoint}")
+        sam2_model = build_sam2(sam2_config, sam2_checkpoint, device=device)
+        sam2_pred  = SAM2ImagePredictor(sam2_model)
+
+        _loaded_models[model_key] = {"gdino": gdino_model, "sam2": sam2_pred}
+        print("[GSAM2] Models loaded and cached.")
+
+    gdino_model = _loaded_models[model_key]["gdino"]
+    sam2_pred   = _loaded_models[model_key]["sam2"]
+
+    # ── Grounding DINO inference ──────────────────────────────────────────
+    from groundingdino.util.inference import load_image as _gdino_load_image
+    from groundingdino.util.inference import predict as _gdino_predict
+
+    # load_image expects a file path; use a temp file from numpy array
+    pil_img = _PIL.fromarray(image)
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+        tmp_path = tmp.name
+    try:
+        pil_img.save(tmp_path, quality=95)
+        _, img_tensor = _gdino_load_image(tmp_path)
+    finally:
+        os.unlink(tmp_path)
+
+    with torch.no_grad():
+        boxes, confidences, phrase_labels = _gdino_predict(
+            model=gdino_model,
+            image=img_tensor,
+            caption=text_prompt,
+            box_threshold=box_threshold,
+            text_threshold=text_threshold,
+            device=device,
+        )
+
+    h, w = image.shape[:2]
+    if boxes is None or len(boxes) == 0:
+        print("[GSAM2] Grounding DINO found no boxes.")
+        return np.zeros((0, h, w), dtype=bool), []
+
+    # boxes: (N, 4) cxcywh normalised → xyxy absolute pixels
+    import torchvision
+    scale = torch.tensor([w, h, w, h], dtype=torch.float32)
+    xyxy_t = torchvision.ops.box_convert(
+        boxes.cpu() * scale, in_fmt="cxcywh", out_fmt="xyxy"
+    )  # (N, 4) float tensor
+
+    # ── NMS: remove duplicate detections of the same object ───────────────
+    conf_t = torch.tensor(confidences, dtype=torch.float32) if not isinstance(confidences, torch.Tensor) else confidences.cpu().float()
+    keep = torchvision.ops.nms(xyxy_t.float(), conf_t, nms_threshold)
+    xyxy_t = xyxy_t[keep]
+    phrase_labels = [phrase_labels[i] for i in keep.tolist()]
+    print(
+        f"[GSAM2] After NMS ({nms_threshold}): {len(keep)}/{len(boxes)} boxes kept"
+    )
+
+    if len(xyxy_t) == 0:
+        print("[GSAM2] No boxes after NMS.")
+        return np.zeros((0, h, w), dtype=bool), []
+
+    xyxy_boxes = xyxy_t.numpy()
+
+    # ── SAM 2 inference ────────────────────────────────────────────────────
+    sam2_pred.set_image(image)
+
+    masks_list = []
+    for box in xyxy_boxes:
+        m, scores, _ = sam2_pred.predict(
+            box=box,
+            multimask_output=True,
+        )
+        best = scores.argmax()
+        masks_list.append(m[best].astype(bool))
+
+    masks = np.stack(masks_list, axis=0)     # (N, H, W)
+    labels = list(phrase_labels)
+
+    print(
+        f"[GSAM2] {len(masks)} masks "
+        f"(box_thresh={box_threshold}, text_thresh={text_threshold})"
+    )
+    return masks, labels
+
+
+# =============================================================================
 # CLIPSeg - Background/Foreground Classification (in-the-wild mode)
 # =============================================================================
 def run_clipseg(image, masks):

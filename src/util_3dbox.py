@@ -152,14 +152,53 @@ def estimate_bbox(in_pc, cat_name=None, ground_equ=None, method='pca'):
 
     # Rotate the point cloud to align with the x-axis and z-axis
     rotated_pc_2 = rotate_y(yaw) @ rotated_pc.T
-    x_min, x_max = rotated_pc_2[0, :].min(), rotated_pc_2[0, :].max()
-    y_min, y_max = rotated_pc_2[1, :].min(), rotated_pc_2[1, :].max()
-    z_min, z_max = rotated_pc_2[2, :].min(), rotated_pc_2[2, :].max()
+    # Original:
+    # x_min, x_max = rotated_pc_2[0, :].min(), rotated_pc_2[0, :].max()
+    # y_min, y_max = rotated_pc_2[1, :].min(), rotated_pc_2[1, :].max()
+    # z_min, z_max = rotated_pc_2[2, :].min(), rotated_pc_2[2, :].max()
+    extent_percentile = float(os.environ.get("BBOX_EXTENT_PERCENTILE", "2"))
+    if extent_percentile > 0:
+        lo, hi = extent_percentile, 100 - extent_percentile
+        x_min, x_max = np.percentile(rotated_pc_2[0, :], [lo, hi])
+        y_min, y_max = np.percentile(rotated_pc_2[1, :], [lo, hi])
+        z_min, z_max = np.percentile(rotated_pc_2[2, :], [lo, hi])
+    else:
+        x_min, x_max = rotated_pc_2[0, :].min(), rotated_pc_2[0, :].max()
+        y_min, y_max = rotated_pc_2[1, :].min(), rotated_pc_2[1, :].max()
+        z_min, z_max = rotated_pc_2[2, :].min(), rotated_pc_2[2, :].max()
 
     dx, dy, dz = x_max - x_min, y_max - y_min, z_max - z_min
     cx, cy, cz = (x_min + x_max) / 2, (y_min + y_max) / 2, (z_min + z_max) / 2
+    center_aligned = np.array([cx, cy, cz])
+    R_cam = rotation_matrix.T @ rotate_y(-yaw)
 
-    print(f"[{method}] dx={dx:.3f}, dy={dy:.3f}, dz={dz:.3f}")
+    thin_labels = {
+        label.strip().lower()
+        for label in os.environ.get("THIN_OBJECT_LABELS", "tv,television,monitor").split(",")
+        if label.strip()
+    }
+    cat_norm = str(cat_name or "").strip().lower().replace("_", " ").replace("-", " ")
+    extents = np.array([dx, dy, dz], dtype=np.float64)
+    depth_axis = 2
+    if cat_norm in thin_labels:
+        # Original:
+        # dz = z_max - z_min
+        # old_dz = dz
+        # dz = min(dz, forced_dz)
+        local_axes_in_cam = R_cam[:, :3]
+        camera_depth = np.array([0.0, 0.0, 1.0])
+        depth_axis = int(np.argmax(np.abs(local_axes_in_cam.T @ camera_depth)))
+        forced_depth = float(os.environ.get("THIN_OBJECT_DEPTH_M", "0.05"))
+        old_depth = extents[depth_axis]
+        extents[depth_axis] = min(extents[depth_axis], forced_depth)
+        print(
+            f"[thin-object] {cat_name}: clamped camera-depth axis "
+            f"{depth_axis} extent {old_depth:.3f} -> {extents[depth_axis]:.3f}m"
+        )
+
+    dx, dy, dz = extents.tolist()
+
+    print(f"[{method}] dx={dx:.3f}, dy={dy:.3f}, dz={dz:.3f}, extent_p={extent_percentile:g}")
 
     # Generate vertices in aligned space
     vertices = convert_box_vertices(cx, cy, cz, dx, dy, dz, 0).astype(np.float16)
@@ -169,11 +208,19 @@ def estimate_bbox(in_pc, cat_name=None, ground_equ=None, method='pca'):
     vertices = np.dot(vertices, rotation_matrix.T)
 
     # Calculate center by transforming the center point directly
-    center_aligned = np.array([cx, cy, cz])
     center_cam = rotation_matrix.T @ (rotate_y(-yaw) @ center_aligned)
 
-    dimension = [dz, dy, dx]
-    R_cam = rotation_matrix.T @ rotate_y(-yaw)
+    if depth_axis == 0:
+        width_axis = 2
+    elif depth_axis == 2:
+        width_axis = 0
+    else:
+        width_axis = int(0 if extents[0] >= extents[2] else 2)
+    dimension = [
+        float(extents[depth_axis]),
+        float(extents[1]),
+        float(extents[width_axis]),
+    ]
 
     return vertices, center_cam, dimension, R_cam
 
@@ -285,6 +332,7 @@ def save_3d_with_ground_alignment_bbox(scene_dir, bbox_method='pca'):
         obj_dict["center_cam"] = center_cam.tolist()
         obj_dict["R_cam"] = R_cam.tolist()
         obj_dict["dimensions"] = dimensions
+        obj_dict["dimension_names"] = ["camera_depth", "camera_height", "camera_width"]
         obj_dict["bbox3D_cam"] = boxes3d.tolist()
         bbox_list.append(obj_dict)
 

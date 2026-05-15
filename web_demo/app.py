@@ -22,16 +22,19 @@ RUNTIME_DIR = APP_DIR / "runtime"
 UPLOAD_DIR = RUNTIME_DIR / "uploads"
 JOBS_DIR = RUNTIME_DIR / "jobs"
 LOGS_DIR = RUNTIME_DIR / "logs"
+PHOTO_LOGS_DIR = REPO_ROOT / "logs"
 PIPELINE_SCRIPT = REPO_ROOT / "run_single_full_pipeline_parallel.sh"
-DEFAULT_GPU_IDX = 0
+DEFAULT_GPU_IDX = 1 # gpu 0으로 바꿀 것
 DEFAULT_OBJ_REC = "amodal3r"
-DEFAULT_USE_YOLO_SEG = 1
+DEFAULT_USE_YOLO_SEG = 0
+DEFAULT_SEG_BACKEND = "gsam2"
 DEFAULT_ONE_TON_CAPACITY_M3 = 6.0
 DEFAULT_FILL_RATE = 0.6
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 JOBS_DIR.mkdir(parents=True, exist_ok=True)
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
+PHOTO_LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_UPLOAD_MB = 20
 ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".webp"}
@@ -214,19 +217,46 @@ def _run_pipeline(job_id: str) -> None:
 
     image_path = Path(job["image_path"])
     log_path = LOGS_DIR / f"{job_id}.log"
+    image_log_stem = _safe_stem(job.get("image_name") or image_path.name)
+    photo_log_path = PHOTO_LOGS_DIR / f"{image_log_stem}.log"
     cmd = ["bash", str(PIPELINE_SCRIPT), str(image_path)]
 
     env = os.environ.copy()
     env["GPU_IDX"] = str(job["gpu_idx"])
     env["OBJ_REC"] = str(job["obj_rec"])
     env["USE_YOLO_SEG"] = str(job["use_yolo_seg"])
+    env["SEG_BACKEND"] = str(job.get("seg_backend", DEFAULT_SEG_BACKEND))
 
-    _update_job(job_id, status="queued", stage="queued (waiting turn)", log_path=str(log_path))
+    _update_job(
+        job_id,
+        status="queued",
+        stage="queued (waiting turn)",
+        log_path=str(log_path),
+        photo_log_path=str(photo_log_path),
+    )
     with _pipeline_lock:
-        _update_job(job_id, status="running", stage="starting pipeline", log_path=str(log_path))
+        _update_job(
+            job_id,
+            status="running",
+            stage="starting pipeline",
+            log_path=str(log_path),
+            photo_log_path=str(photo_log_path),
+        )
         start = time.time()
 
-        with log_path.open("w", encoding="utf-8") as log_fp:
+        with log_path.open("w", encoding="utf-8") as log_fp, photo_log_path.open("w", encoding="utf-8") as photo_log_fp:
+            header = (
+                f"job_id={job_id}\n"
+                f"image_name={job.get('image_name', image_path.name)}\n"
+                f"image_path={image_path}\n"
+                f"seg_backend={env['SEG_BACKEND']}\n"
+                f"use_yolo_seg={env['USE_YOLO_SEG']}\n"
+                "============================================================\n"
+            )
+            log_fp.write(header)
+            photo_log_fp.write(header)
+            log_fp.flush()
+            photo_log_fp.flush()
             proc = subprocess.Popen(
                 cmd,
                 cwd=str(REPO_ROOT),
@@ -241,7 +271,9 @@ def _run_pipeline(job_id: str) -> None:
             for raw_line in proc.stdout:
                 line = raw_line.rstrip("\n")
                 log_fp.write(raw_line)
+                photo_log_fp.write(raw_line)
                 log_fp.flush()
+                photo_log_fp.flush()
 
                 stage = _extract_stage(line)
                 if stage:
@@ -337,6 +369,7 @@ async def _create_job_from_upload(
         "gpu_idx": DEFAULT_GPU_IDX,
         "obj_rec": DEFAULT_OBJ_REC,
         "use_yolo_seg": DEFAULT_USE_YOLO_SEG,
+        "seg_backend": DEFAULT_SEG_BACKEND,
         "one_ton_capacity_m3": DEFAULT_ONE_TON_CAPACITY_M3,
         "fill_rate": DEFAULT_FILL_RATE,
         "from_elevator": from_elevator.lower() == "true",
