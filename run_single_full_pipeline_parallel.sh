@@ -142,6 +142,7 @@ elif [[ "${USE_SAM3:-0}" == "1" ]]; then
   echo "[1/7] Generating single-image COCONUT-style annotation via SAM3 (sam env)..."
   SAM3_PROMPTS="${SAM3_PROMPTS:-$INDOOR_CLASSES_DEFAULT}"
   SAM3_CONF="${SAM3_CONF:-0.5}"
+  INTERACTIVE_SAM3="${INTERACTIVE_SAM3:-0}"
   SAM3_SCRIPT="$REPO/src/sam3_seg_for_la3d.py"
   if [[ ! -f "$SAM3_SCRIPT" ]]; then
     echo "SAM3 script not found: $SAM3_SCRIPT"
@@ -154,7 +155,8 @@ elif [[ "${USE_SAM3:-0}" == "1" ]]; then
     --prompts "$SAM3_PROMPTS" \
     --keep_labels "$KEEP_LABELS" \
     --min_mask_area "$MIN_MASK_AREA" \
-    --confidence "$SAM3_CONF"
+    --confidence "$SAM3_CONF" \
+    $( [[ "$INTERACTIVE_SAM3" == "1" ]] && echo "--interactive" )
 else
   echo "[1/7] Generating single-image COCONUT-style annotation..."
   # (segmentation inline script unchanged — keeping it inline for self-containedness)

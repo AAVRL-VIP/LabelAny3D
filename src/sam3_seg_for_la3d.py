@@ -16,6 +16,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 
 import cv2
 import numpy as np
@@ -36,7 +37,7 @@ INDOOR_PROMPTS = [
     "cabinet", "shelf", "drawer", "tv", "monitor",
     "refrigerator", "microwave", "washing machine",
     "oven", "bench", "furniture", "couch", "bookcase",
-    "blanket", "fan", "storage_box", "box", "closet",
+    "fan", "storage_box", "box", "closet",
     "air conditioner", "cooker", "wardrobe", "dresser",
     "pantry shelf", "piano", "coffee table", "low table", "television",
 ]
@@ -69,16 +70,11 @@ def keep_label(label: str, keep_labels: set) -> bool:
 
 
 def run_sam3_on_image(
+    processor: Sam3Processor,
     image: Image.Image,
     prompts: list,
-    confidence: float,
-    device: str,
 ) -> list:
     """Returns list of (mask_bool[H,W], label, score, bbox_xyxy)."""
-    bpe_path = os.path.join(os.path.dirname(sam3.__file__), "assets", "bpe_simple_vocab_16e6.txt.gz")
-    model = build_sam3_image_model(bpe_path=bpe_path).to(device).eval()
-    processor = Sam3Processor(model, confidence_threshold=confidence)
-
     state = processor.set_image(image)
 
     results = []
@@ -102,6 +98,132 @@ def run_sam3_on_image(
             results.append((m.astype(bool), prompt, float(s), b.tolist()))
 
     return results
+
+
+def _interactive_refine_with_clicks(
+    model,
+    image_np: np.ndarray,
+    detections: list,
+    enabled: bool,
+    device: str,
+    use_bf16: bool,
+) -> list:
+    if not enabled or not detections:
+        return detections
+
+    print("[sam3] INTERACTIVE_SAM3=1: launching native click refinement")
+    print("[sam3][interactive] Controls: left click=positive, right click=negative")
+    print("[sam3][interactive] Keys: n=next, p=prev, c=clear clicks, s=skip, q=finish")
+
+    H, W = image_np.shape[:2]
+    window_name = "SAM3 Interactivity (click refine)"
+    current_idx = 0
+    clicks = {}
+    labels = {}
+    low_res_logits = {}
+    last_render = {}
+    autocast_ctx = (
+        torch.autocast("cuda", dtype=torch.bfloat16)
+        if use_bf16 and device.startswith("cuda")
+        else torch.autocast("cpu", enabled=False)
+    )
+
+    def _predict_with_points(point_coords, point_labels, box_xyxy, mask_input):
+        with torch.inference_mode(), autocast_ctx:
+            return model.predict_inst(
+                {"original_height": H, "original_width": W, "backbone_out": state["backbone_out"]},
+                point_coords=point_coords,
+                point_labels=point_labels,
+                box=np.array(box_xyxy, dtype=np.float32),
+                mask_input=mask_input,
+                multimask_output=False,
+                return_logits=False,
+                normalize_coords=False,
+            )
+
+    def _render():
+        nonlocal last_render
+        vis = image_np.copy()
+        mask_bool, label, _score, _bbox = detections[current_idx]
+        curr_mask = mask_bool.astype(bool)
+        if current_idx in low_res_logits:
+            points = np.array(clicks[current_idx], dtype=np.float32) if clicks.get(current_idx) else None
+            point_labels = np.array(labels[current_idx], dtype=np.int32) if labels.get(current_idx) else None
+            pred_masks, pred_ious, pred_low_res = _predict_with_points(
+                point_coords=points,
+                point_labels=point_labels,
+                box_xyxy=detections[current_idx][3],
+                mask_input=low_res_logits[current_idx],
+            )
+            curr_mask = pred_masks[0] > 0.0
+            detections[current_idx] = (curr_mask, label, float(pred_ious[0]), detections[current_idx][3])
+            low_res_logits[current_idx] = pred_low_res[0]
+
+        overlay = vis.copy()
+        color = np.array([50, 205, 50], dtype=np.uint8)
+        overlay[curr_mask] = (0.55 * overlay[curr_mask] + 0.45 * color).astype(np.uint8)
+        vis = overlay
+        x0, y0, x1, y1 = [int(v) for v in detections[current_idx][3]]
+        cv2.rectangle(vis, (x0, y0), (x1, y1), (255, 200, 0), 2)
+        title = f"[{current_idx + 1}/{len(detections)}] {label}"
+        cv2.putText(vis, title, (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 200, 0), 2)
+        for p, l in zip(clicks.get(current_idx, []), labels.get(current_idx, [])):
+            px, py = int(p[0]), int(p[1])
+            c = (0, 255, 0) if int(l) == 1 else (0, 0, 255)
+            cv2.circle(vis, (px, py), 5, c, -1)
+            cv2.circle(vis, (px, py), 7, (255, 255, 255), 1)
+        last_render = {"mask": curr_mask}
+        cv2.imshow(window_name, vis)
+
+    def _on_mouse(event, x, y, _flags, _userdata):
+        if event not in (cv2.EVENT_LBUTTONDOWN, cv2.EVENT_RBUTTONDOWN):
+            return
+        lbl = 1 if event == cv2.EVENT_LBUTTONDOWN else 0
+        clicks.setdefault(current_idx, []).append([float(x), float(y)])
+        labels.setdefault(current_idx, []).append(int(lbl))
+        pts = np.array(clicks[current_idx], dtype=np.float32)
+        lbs = np.array(labels[current_idx], dtype=np.int32)
+        pred_masks, pred_ious, pred_low_res = _predict_with_points(
+            point_coords=pts,
+            point_labels=lbs,
+            box_xyxy=detections[current_idx][3],
+            mask_input=low_res_logits.get(current_idx, None),
+        )
+        new_mask = pred_masks[0] > 0.0
+        det = detections[current_idx]
+        detections[current_idx] = (new_mask, det[1], float(pred_ious[0]), det[3])
+        low_res_logits[current_idx] = pred_low_res[0]
+        _render()
+
+    with torch.inference_mode(), autocast_ctx:
+        state = Sam3Processor(model).set_image(Image.fromarray(image_np))
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    cv2.setMouseCallback(window_name, _on_mouse)
+    _render()
+
+    while True:
+        key = cv2.waitKey(50) & 0xFF
+        if key == 255:
+            continue
+        if key in (ord("q"), 27):
+            break
+        if key == ord("n"):
+            current_idx = min(current_idx + 1, len(detections) - 1)
+            _render()
+        elif key == ord("p"):
+            current_idx = max(current_idx - 1, 0)
+            _render()
+        elif key == ord("c"):
+            clicks[current_idx] = []
+            labels[current_idx] = []
+            low_res_logits.pop(current_idx, None)
+            _render()
+        elif key == ord("s"):
+            current_idx = min(current_idx + 1, len(detections) - 1)
+            _render()
+
+    cv2.destroyAllWindows()
+    return detections
 
 
 def main():
@@ -132,6 +254,9 @@ def main():
                          "drawers contained in a parent bbox.")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--use_bf16", action="store_true", default=True)
+    ap.add_argument("--interactive", action="store_true",
+                    help="Enable SAM3 native interactive click refinement "
+                         "(left click=positive, right click=negative).")
     args = ap.parse_args()
 
     image_path = Path(args.image).resolve()
@@ -160,14 +285,27 @@ def main():
         else torch.autocast("cpu", enabled=False)
     )
 
+    bpe_path = os.path.join(os.path.dirname(sam3.__file__), "assets", "bpe_simple_vocab_16e6.txt.gz")
+    model = build_sam3_image_model(bpe_path=bpe_path).to(args.device).eval()
+    processor = Sam3Processor(model, confidence_threshold=args.confidence)
+
     with torch.inference_mode(), autocast_ctx:
         detections = run_sam3_on_image(
+            processor=processor,
             image=img,
             prompts=prompts,
-            confidence=args.confidence,
-            device=args.device,
         )
     print(f"[sam3] raw detections: {len(detections)} (prompts={len(prompts)})")
+
+    if args.interactive:
+        detections = _interactive_refine_with_clicks(
+            model=model,
+            image_np=img_np,
+            detections=detections,
+            enabled=True,
+            device=args.device,
+            use_bf16=args.use_bf16,
+        )
 
     # Sort highest score first so NMS keeps the most-confident detection per object.
     detections.sort(key=lambda d: -d[2])
