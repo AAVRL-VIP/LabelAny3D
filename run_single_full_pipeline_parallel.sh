@@ -27,11 +27,19 @@ SKIP_SEG="${SKIP_SEG:-0}"
 KEEP_LABELS="${KEEP_LABELS:-}"
 USE_YOLO_SEG="${USE_YOLO_SEG:-0}"
 YOLO_SEG_MODEL="${YOLO_SEG_MODEL:-yoloe-26l-seg.pt}"
-YOLO_CONF="${YOLO_CONF:-0.35}"
-YOLO_IOU="${YOLO_IOU:-0.70}"
+YOLO_CONF="${YOLO_CONF:-0.45}"
+YOLO_IOU="${YOLO_IOU:-0.55}"
 YOLO_MAX_DET="${YOLO_MAX_DET:-300}"
 YOLO_CLASSES="${YOLO_CLASSES:-}"
 YOLO_CLASS_PRESET="${YOLO_CLASS_PRESET:-indoor}"
+
+# ============================================================
+# Single source of truth: indoor furniture keyword list.
+# Used by both YOLOE (USE_YOLO_SEG=1) and SAM3 (USE_SAM3=1) paths.
+# Edit this list once → both segmenters reflect the change.
+# ============================================================
+INDOOR_CLASSES_DEFAULT="chair,table,sofa,bed,desk,mattress,cabinet,shelf,drawer,tv,monitor,refrigerator,microwave,washing machine,oven,bench,furniture,couch,bookcase,blanket,fan,storage_box,box,closet,air conditioner,cooker,wardrobe,dresser,pantry shelf,piano,coffee table,low table,television"
+export INDOOR_CLASSES_DEFAULT
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -130,6 +138,23 @@ if [[ "$SKIP_SEG" == "1" ]]; then
   if [[ "$SEG_JSON" != "$COCO_VAL_JSON" ]]; then
     cp -f "$SEG_JSON" "$COCO_VAL_JSON"
   fi
+elif [[ "${USE_SAM3:-0}" == "1" ]]; then
+  echo "[1/7] Generating single-image COCONUT-style annotation via SAM3 (sam env)..."
+  SAM3_PROMPTS="${SAM3_PROMPTS:-$INDOOR_CLASSES_DEFAULT}"
+  SAM3_CONF="${SAM3_CONF:-0.5}"
+  SAM3_SCRIPT="$REPO/src/sam3_seg_for_la3d.py"
+  if [[ ! -f "$SAM3_SCRIPT" ]]; then
+    echo "SAM3 script not found: $SAM3_SCRIPT"
+    exit 1
+  fi
+  /opt/conda/envs/sam/bin/python "$SAM3_SCRIPT" \
+    --image "$IMAGE_PATH" \
+    --out_json "$COCO_VAL_JSON" \
+    --out_seg_dir "$RESULT_SCENE_DIR/segmentation" \
+    --prompts "$SAM3_PROMPTS" \
+    --keep_labels "$KEEP_LABELS" \
+    --min_mask_area "$MIN_MASK_AREA" \
+    --confidence "$SAM3_CONF"
 else
   echo "[1/7] Generating single-image COCONUT-style annotation..."
   # (segmentation inline script unchanged — keeping it inline for self-containedness)
@@ -174,15 +199,9 @@ yolo_classes = [x.strip() for x in yolo_classes_raw.split(",") if x.strip()]
 yolo_class_preset = os.environ.get("YOLO_CLASS_PRESET", "indoor").strip().lower()
 
 if not yolo_classes and yolo_class_preset == "indoor":
-    yolo_classes = [
-        "chair", "table", "sofa", "bed", "desk", "mattress",
-        "cabinet", "shelf", "drawer", "tv", "monitor",
-        "refrigerator", "microwave", "washing machine",
-        "oven", "bench", "furniture", "couch", "bookcase", 
-        "blanket", "fan", "storage_box", "box", "closet", 
-        "air conditioner", "cooker", "wardrobe", "dresser",
-        "pantry shelf", "piano", "coffee table", "low table", "television"
-    ]
+    # Pull single-source list from INDOOR_CLASSES_DEFAULT exported by the shell.
+    _indoor = os.environ.get("INDOOR_CLASSES_DEFAULT", "")
+    yolo_classes = [x.strip() for x in _indoor.split(",") if x.strip()]
 furniture_keywords = {
     # 소파/의자류
     "furniture", "sofa", "couch", "chair", "stool", "bench",
