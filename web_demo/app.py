@@ -28,7 +28,10 @@ JOBS_DIR = RUNTIME_DIR / "jobs"
 LOGS_DIR = RUNTIME_DIR / "logs"
 INTERACTIVE_DIR = RUNTIME_DIR / "interactive"
 PIPELINE_SCRIPT = REPO_ROOT / "run_single_full_pipeline_parallel.sh"
-SAM_PYTHON = "/opt/conda/envs/sam/bin/python"
+# Python used to run the SAM3 interactive subprocess. SAM3 now lives in the
+# same env as this server, so default to the current interpreter. Override with
+# SAM_PYTHON=/path/to/python if SAM3 is installed in a separate env.
+SAM_PYTHON = os.environ.get("SAM_PYTHON", sys.executable)
 SAM3_WEB_SCRIPT = REPO_ROOT / "src" / "sam3_web_interactive.py"
 DEFAULT_GPU_IDX = 0
 DEFAULT_OBJ_REC = "amodal3r"
@@ -63,6 +66,18 @@ _sam3_runtime: Dict[str, object] = {"model": None, "processor_cls": None, "mask_
 
 class BatchAggregateRequest(BaseModel):
     job_ids: List[str]
+
+
+class RunCommittedRequest(BaseModel):
+    """Run the downstream pipeline for a set of already-committed interactive
+    SAM3 sessions. Used by the multi-image flow: interact + commit every image
+    first (auto_run_pipeline=False), then process them all at once."""
+    sessions: List[str]
+    from_elevator: bool = True
+    from_floor: int = 1
+    to_elevator: bool = True
+    to_floor: int = 1
+    distance_km: float = 10.0
 
 
 class EstimateRequest(BaseModel):
@@ -825,11 +840,21 @@ def sam3_interactive_commit(
             "--selected_indices", selected_indices,
         ]
     )
+    # Persist a per-session copy of the committed annotation. The shared
+    # coconut_val.json gets overwritten by the next commit, so the multi-image
+    # "interact all first, then process all" flow relies on this per-session
+    # copy (kept in the session dir, which force_clean_scene never touches).
+    committed_json = session_dir / "committed_coconut.json"
+    try:
+        shutil.copyfile(out_json, committed_json)
+    except Exception:
+        committed_json = out_json
     resp = {
         "session_id": session_id,
         "scene_name": scene_name_final,
         "saved": True,
         "out_json": str(out_json),
+        "committed_json": str(committed_json),
         "out_seg_dir": str(out_seg_dir),
         "overlay": str(out_seg_dir / "overlay.png"),
         "num_instances": data["num_instances"],
@@ -911,6 +936,62 @@ async def create_jobs_batch(
             distance_km=distance_km,
         )
         jobs.append({"job_id": job["job_id"], "status": "queued", "image_name": job["image_name"]})
+
+    return {"count": len(jobs), "jobs": jobs}
+
+
+@app.post("/api/jobs/run_committed")
+def run_committed_jobs(req: RunCommittedRequest):
+    """Queue the downstream pipeline for already-committed interactive sessions.
+
+    The multi-image flow commits every image's segmentation first
+    (auto_run_pipeline=False), collecting session ids, then calls this to run
+    them all. Each job reuses the session's saved segmentation (skip_seg=1) and
+    runs serialized via _pipeline_lock — safe on a single GPU."""
+    if not req.sessions:
+        raise HTTPException(status_code=400, detail="sessions is empty.")
+    if not PIPELINE_SCRIPT.exists():
+        raise HTTPException(status_code=500, detail="Pipeline script not found.")
+
+    jobs = []
+    for session_id in req.sessions:
+        session_dir = INTERACTIVE_DIR / session_id
+        meta_path = session_dir / "session.json"
+        if not meta_path.exists():
+            raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except Exception:
+            raise HTTPException(status_code=500, detail=f"Unreadable session meta: {session_id}")
+        image_path = Path(str(meta.get("image_path", "")))
+        if not image_path.exists():
+            raise HTTPException(status_code=500, detail=f"Image for session {session_id} not found.")
+        committed_json = session_dir / "committed_coconut.json"
+        if not committed_json.exists():
+            raise HTTPException(
+                status_code=409,
+                detail=f"Session {session_id} has no committed segmentation. Commit it first.",
+            )
+        job = _create_job_from_existing_image(
+            image_path=image_path,
+            image_name=image_path.name,
+            from_elevator=req.from_elevator,
+            from_floor=req.from_floor,
+            to_elevator=req.to_elevator,
+            to_floor=req.to_floor,
+            distance_km=req.distance_km,
+            skip_seg=1,
+            seg_json=str(committed_json),
+            force_clean_scene=True,
+        )
+        jobs.append(
+            {
+                "job_id": job["job_id"],
+                "status": "queued",
+                "image_name": job["image_name"],
+                "session_id": session_id,
+            }
+        )
 
     return {"count": len(jobs), "jobs": jobs}
 
