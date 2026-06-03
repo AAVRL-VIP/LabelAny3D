@@ -22,7 +22,7 @@ fi
 IMAGE_PATH="$1"
 GPU_IDX="${GPU_IDX:-0}"
 OBJ_REC="${OBJ_REC:-amodal3r}"
-MIN_MASK_AREA="${MIN_MASK_AREA:-6400}"
+MIN_MASK_AREA="${MIN_MASK_AREA:-800}"
 SKIP_SEG="${SKIP_SEG:-0}"
 KEEP_LABELS="${KEEP_LABELS:-}"
 USE_YOLO_SEG="${USE_YOLO_SEG:-0}"
@@ -38,7 +38,7 @@ YOLO_CLASS_PRESET="${YOLO_CLASS_PRESET:-indoor}"
 # Used by both YOLOE (USE_YOLO_SEG=1) and SAM3 (USE_SAM3=1) paths.
 # Edit this list once → both segmenters reflect the change.
 # ============================================================
-INDOOR_CLASSES_DEFAULT="chair,table,sofa,bed,desk,mattress,cabinet,shelf,drawer,tv,monitor,refrigerator,microwave,washing machine,oven,bench,furniture,couch,bookcase,blanket,fan,storage_box,box,closet,air conditioner,cooker,wardrobe,dresser,pantry shelf,piano,coffee table,low table,television"
+INDOOR_CLASSES_DEFAULT="chair,table,sofa,bed,desk,mattress,cabinet,shelf,drawer,tv,monitor,refrigerator,microwave,washing machine,oven,bench,couch,bookcase,fan,storage_box,box,closet,air conditioner,cooker,wardrobe,dresser,pantry shelf,piano,coffee table,low table,television, furniture," 
 export INDOOR_CLASSES_DEFAULT
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -148,7 +148,7 @@ elif [[ "${USE_SAM3:-0}" == "1" ]]; then
     echo "SAM3 script not found: $SAM3_SCRIPT"
     exit 1
   fi
-  /opt/conda/envs/sam/bin/python "$SAM3_SCRIPT" \
+  env -u PYTHONPATH /opt/conda/envs/sam/bin/python "$SAM3_SCRIPT" \
     --image "$IMAGE_PATH" \
     --out_json "$COCO_VAL_JSON" \
     --out_seg_dir "$RESULT_SCENE_DIR/segmentation" \
@@ -188,7 +188,7 @@ torch.backends.cudnn.benchmark = False
 repo = Path.cwd().parent
 image_path = Path(os.environ["IMAGE_PATH"]).resolve()
 img_name = image_path.name
-min_mask_area = int(os.environ.get("MIN_MASK_AREA", "6400"))
+min_mask_area = int(os.environ.get("MIN_MASK_AREA", "800"))
 keep_labels_raw = os.environ.get("KEEP_LABELS", "")
 keep_labels = {x.strip().lower() for x in keep_labels_raw.split(",") if x.strip()}
 use_yolo_seg = os.environ.get("USE_YOLO_SEG", "0") == "1"

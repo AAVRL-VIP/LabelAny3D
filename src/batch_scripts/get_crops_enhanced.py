@@ -15,7 +15,21 @@ import numpy as np
 from PIL import Image
 from util import read_bounding_boxes_segmentations, crop_object
 from scipy.ndimage import binary_opening
-from detectron2.structures import BoxMode
+# detectron2 is broken/absent in the la3d env; provide a minimal BoxMode shim
+# instead of importing it (only XYWH_ABS -> XYXY_ABS is used downstream).
+class BoxMode:
+    XYWH_ABS = 1
+    XYXY_ABS = 0
+    @staticmethod
+    def convert(boxes, from_mode, to_mode):
+        import numpy as np
+        boxes = np.array(boxes, dtype=float)
+        if from_mode == BoxMode.XYWH_ABS and to_mode == BoxMode.XYXY_ABS:
+            result = boxes.copy()
+            result[..., 2] = boxes[..., 0] + boxes[..., 2]
+            result[..., 3] = boxes[..., 1] + boxes[..., 3]
+            return result
+        return boxes
 from batch_scripts.coconut_loader import CoconutLoader, get_dataset_paths
 
 
