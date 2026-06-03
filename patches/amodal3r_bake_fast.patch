@@ -1,0 +1,38 @@
+# Amodal3R reconstruction speedup (texture bake fast + cheaper fill_holes)
+# external/Amodal3R is gitignored (vendored nested repo), so this change is
+# preserved here as a patch. Apply with:
+#   cd external/Amodal3R && git apply ../../patches/amodal3r_bake_fast.patch
+#
+diff --git a/amodal3r/utils/postprocessing_utils.py b/amodal3r/utils/postprocessing_utils.py
+index f67c717..dff9275 100644
+--- a/amodal3r/utils/postprocessing_utils.py
++++ b/amodal3r/utils/postprocessing_utils.py
+@@ -421,7 +421,7 @@ def to_glb(
+     """
+     vertices = mesh.vertices.cpu().numpy()
+     faces = mesh.faces.cpu().numpy()
+-    
++
+     # mesh postprocess
+     vertices, faces = postprocess_mesh(
+         vertices, faces,
+@@ -430,8 +430,8 @@ def to_glb(
+         fill_holes=fill_holes,
+         fill_holes_max_hole_size=fill_holes_max_size,
+         fill_holes_max_hole_nbe=int(250 * np.sqrt(1-simplify)),
+-        fill_holes_resolution=1024,
+-        fill_holes_num_views=1000,
++        fill_holes_resolution=512,
++        fill_holes_num_views=150,
+         debug=debug,
+         verbose=verbose,
+     )
+@@ -448,7 +448,7 @@ def to_glb(
+     texture = bake_texture(
+         vertices, faces, uvs,
+         observations, masks, extrinsics, intrinsics,
+-        texture_size=texture_size, mode='opt',
++        texture_size=texture_size, mode='fast',
+         lambda_tv=0.01,
+         verbose=verbose
+     )

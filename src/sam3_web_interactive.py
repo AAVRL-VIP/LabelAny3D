@@ -72,7 +72,7 @@ def _reindex_files(session_dir: Path, num_dets: int) -> None:
 
 
 def _render_overlay(session_dir: Path, data: dict) -> Path:
-    image_np = np.array(Image.open(data["image_path"]).convert("RGB"))
+    image_np = np.array(ImageOps.exif_transpose(Image.open(data["image_path"])).convert("RGB"))
     vis = image_np.copy().astype(np.uint8)
     curr_idx = int(data["current_idx"])
     for idx, det in enumerate(data["detections"]):
@@ -365,7 +365,7 @@ def _commit(args):
     data = _load_session(session_dir)
     out_json = Path(args.out_json)
     out_seg_dir = Path(args.out_seg_dir)
-    image_np = np.array(Image.open(data["image_path"]).convert("RGB"))
+    image_np = np.array(ImageOps.exif_transpose(Image.open(data["image_path"])).convert("RGB"))
     H, W = image_np.shape[:2]
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_seg_dir.mkdir(parents=True, exist_ok=True)

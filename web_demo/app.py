@@ -28,6 +28,7 @@ JOBS_DIR = RUNTIME_DIR / "jobs"
 LOGS_DIR = RUNTIME_DIR / "logs"
 INTERACTIVE_DIR = RUNTIME_DIR / "interactive"
 PIPELINE_SCRIPT = REPO_ROOT / "run_single_full_pipeline_parallel.sh"
+BATCH_PIPELINE_SCRIPT = REPO_ROOT / "run_batch_full_pipeline.sh"
 # Python used to run the SAM3 interactive subprocess. SAM3 now lives in the
 # same env as this server, so default to the current interpreter. Override with
 # SAM_PYTHON=/path/to/python if SAM3 is installed in a separate env.
@@ -158,7 +159,7 @@ def _extract_stage(line: str) -> Optional[str]:
     for key, value in stage_map.items():
         if key in line:
             return value
-    if "=== Unified Parallel" in line:
+    if "=== Unified Parallel" in line or "=== Parallel:" in line:
         return "2-5/7 depth+crop+completion+elevation"
     if "TIMING SUMMARY" in line:
         return "finishing"
@@ -543,6 +544,99 @@ def _run_pipeline(job_id: str) -> None:
         _jobs[job_id] = job
 
 
+def _scene_name_for(image_name: str) -> str:
+    """Match the val-split scene_name derivation used by the batch pipeline."""
+    return Path(image_name).stem.replace("/", "_").replace("-", "_")
+
+
+def _finalize_job_from_scene(job: dict) -> None:
+    """Compute the summary for one job from its scene's 3dbbox.json."""
+    job_id = job["job_id"]
+    scene_name = _scene_name_for(job["image_name"])
+    bbox_path = REPO_ROOT / "experimental_results" / "single" / "val" / scene_name / "3dbbox.json"
+    if not bbox_path.exists():
+        _update_job(job_id, status="failed", stage="failed",
+                    error="Pipeline completed but 3dbbox.json was not generated (no detected objects).")
+        return
+    try:
+        summary = _compute_summary(
+            bbox_path=bbox_path,
+            one_ton_capacity_m3=float(job["one_ton_capacity_m3"]),
+            fill_rate=float(job["fill_rate"]),
+            from_elevator=job.get("from_elevator", True) in [True, "true", "True", 1],
+            from_floor=int(job.get("from_floor", 1)),
+            to_elevator=job.get("to_elevator", True) in [True, "true", "True", 1],
+            to_floor=int(job.get("to_floor", 1)),
+            distance_km=float(job.get("distance_km", 10.0)),
+        )
+    except Exception as e:
+        import traceback
+        _update_job(job_id, status="failed", stage="failed",
+                    error=f"Summary computation failed: {e}\n{traceback.format_exc()}")
+        return
+    job = _load_job(job_id)
+    job.update(status="done", stage="done", result=summary, result_bbox_path=str(bbox_path),
+               updated_at=time.time())
+    _save_job(job)
+
+
+def _run_batch_pipeline(job_ids: List[str]) -> None:
+    """Run ALL images through run_batch_full_pipeline.sh in a single process so
+    each model is loaded once. Per-job status/results are preserved."""
+    jobs = [_load_job(jid) for jid in job_ids]
+    jobs = [j for j in jobs if j is not None]
+    if not jobs:
+        return
+
+    image_paths = [str(j["image_path"]) for j in jobs]
+    log_path = LOGS_DIR / f"batch_{job_ids[0]}.log"
+
+    env = os.environ.copy()
+    first = jobs[0]
+    env["GPU_IDX"] = str(first.get("gpu_idx", DEFAULT_GPU_IDX))
+    env["OBJ_REC"] = str(first.get("obj_rec", DEFAULT_OBJ_REC))
+    env["USE_YOLO_SEG"] = str(first.get("use_yolo_seg", DEFAULT_USE_YOLO_SEG))
+
+    cmd = ["bash", str(BATCH_PIPELINE_SCRIPT)] + image_paths
+
+    for j in jobs:
+        _update_job(j["job_id"], status="queued", stage="queued (waiting turn)", log_path=str(log_path))
+
+    with _pipeline_lock:
+        for j in jobs:
+            _update_job(j["job_id"], status="running", stage="starting batch pipeline")
+        start = time.time()
+        with log_path.open("w", encoding="utf-8") as log_fp:
+            proc = subprocess.Popen(
+                cmd, cwd=str(REPO_ROOT), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, bufsize=1, env=env,
+            )
+            assert proc.stdout is not None
+            for raw_line in proc.stdout:
+                log_fp.write(raw_line)
+                log_fp.flush()
+                stage = _extract_stage(raw_line.rstrip("\n"))
+                if stage:
+                    for j in jobs:
+                        _update_job(j["job_id"], stage=stage)
+            return_code = proc.wait()
+        elapsed = round(time.time() - start, 2)
+
+    if return_code != 0:
+        for j in jobs:
+            job = _load_job(j["job_id"])
+            if job and job.get("status") != "done":
+                _update_job(j["job_id"], status="failed", stage="failed",
+                            error=f"Batch pipeline exited with code {return_code}", elapsed_sec=elapsed)
+        # even on non-zero exit, some scenes may have produced results
+    for j in jobs:
+        job = _load_job(j["job_id"])
+        if job and job.get("status") == "failed":
+            continue
+        _update_job(j["job_id"], elapsed_sec=elapsed)
+        _finalize_job_from_scene(_load_job(j["job_id"]))
+
+
 async def _create_job_from_upload(
     image: UploadFile,
     from_elevator: str,
@@ -550,6 +644,7 @@ async def _create_job_from_upload(
     to_elevator: str,
     to_floor: int,
     distance_km: float,
+    auto_start: bool = True,
 ) -> dict:
     ext = Path(image.filename or "").suffix.lower()
     if ext not in ALLOWED_EXT:
@@ -588,8 +683,9 @@ async def _create_job_from_upload(
     }
     _save_job(job)
 
-    worker = threading.Thread(target=_run_pipeline, args=(job_id,), daemon=True)
-    worker.start()
+    if auto_start:
+        worker = threading.Thread(target=_run_pipeline, args=(job_id,), daemon=True)
+        worker.start()
     return job
 
 
@@ -920,13 +1016,16 @@ async def create_jobs_batch(
     to_floor: int = Form(1),
     distance_km: float = Form(10.0),
 ):
-    if not PIPELINE_SCRIPT.exists():
-        raise HTTPException(status_code=500, detail="Pipeline script not found.")
+    if not BATCH_PIPELINE_SCRIPT.exists():
+        raise HTTPException(status_code=500, detail="Batch pipeline script not found.")
     if not images:
         raise HTTPException(status_code=400, detail="No images provided.")
 
     jobs = []
+    job_ids = []
     for image in images:
+        # auto_start=False: a single batch process runs all images so each model
+        # is loaded only once (vs. one full pipeline per image).
         job = await _create_job_from_upload(
             image=image,
             from_elevator=from_elevator,
@@ -934,8 +1033,13 @@ async def create_jobs_batch(
             to_elevator=to_elevator,
             to_floor=to_floor,
             distance_km=distance_km,
+            auto_start=False,
         )
         jobs.append({"job_id": job["job_id"], "status": "queued", "image_name": job["image_name"]})
+        job_ids.append(job["job_id"])
+
+    worker = threading.Thread(target=_run_batch_pipeline, args=(job_ids,), daemon=True)
+    worker.start()
 
     return {"count": len(jobs), "jobs": jobs}
 

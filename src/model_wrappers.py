@@ -313,7 +313,7 @@ def load_amodal3r():
     return _loaded_models['amodal3r']
 
 
-def infer_with_amodal3r(out_dir, obj_id, seed=1, mesh_simplify=0.95, texture_size=1024):
+def infer_with_amodal3r(out_dir, obj_id, seed=1, mesh_simplify=0.95, texture_size=512):
     """
     Run Amodal3R inference on a single object.
 

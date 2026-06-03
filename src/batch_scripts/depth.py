@@ -40,6 +40,7 @@ from pathlib import Path
 import numpy as np
 import json
 import trimesh
+from PIL import Image
 
 import depth_pro
 import utils3d_moge
@@ -194,12 +195,34 @@ if __name__ == "__main__":
             print(f"Skipping already processed scene: {scene_name}")
             continue
 
+        # Downsample input for depth inference to cap cost on high-res photos.
+        # Inference/alignment/viz run at reduced resolution; only depth_map.npy
+        # and cam_params K are upscaled back to the original resolution for
+        # downstream (whole.py needs depth_map matching the full-res masks).
+        import cv2
+        orig_W, orig_H = scene.image_pil.size
+        DEPTH_MAX_EDGE = 1500
+        depth_scale = min(1.0, DEPTH_MAX_EDGE / max(orig_W, orig_H))
+
+        if depth_scale < 1.0:
+            new_W, new_H = round(orig_W * depth_scale), round(orig_H * depth_scale)
+            small_pil = scene.image_pil.resize((new_W, new_H), Image.LANCZOS)
+            small_input_path = f'{out_dir}/input_small.png'
+            small_pil.save(small_input_path)
+            moge_input_path = small_input_path
+            depthpro_pil = small_pil
+            image_np_used = np.array(small_pil)
+        else:
+            moge_input_path = f'{out_dir}/input.png'
+            depthpro_pil = scene.image_pil
+            image_np_used = scene.image_np
+
         _, moge_depth_map, moge_mask, K_img = infer_geometry_on_image(
-            f'{out_dir}/input.png',
+            moge_input_path,
             out_dir
         )
 
-        img = depthpro_transform(scene.image_pil)
+        img = depthpro_transform(depthpro_pil)
         prediction = depthpro_model.infer(img, f_px=K_img[0, 0])
         pro_depth_map = prediction["depth"].cpu().numpy()
 
@@ -230,12 +253,23 @@ if __name__ == "__main__":
         depth_map = align_depth(moge_depth_map, pro_depth_map, mask=moge_mask)
         pts3d = depth_to_points(depth_map[None], K_img)
 
-        save_moge_data(scene.image_np, pts3d, depth_map, moge_mask, out_dir)
-        np.save(out_dir / 'depth_map.npy', depth_map)
+        # viz outputs at (reduced) inference resolution
+        save_moge_data(image_np_used, pts3d, depth_map, moge_mask, out_dir)
         trimesh.PointCloud(
             pts3d.reshape(-1, 3),
-            scene.image_np.reshape(-1, 3)
+            image_np_used.reshape(-1, 3)
         ).export(out_dir / 'depth_scene.ply')
+
+        # upscale depth_map and intrinsics back to original resolution for downstream
+        if depth_scale < 1.0:
+            depth_map = cv2.resize(depth_map, (orig_W, orig_H), interpolation=cv2.INTER_LINEAR)
+            K_img = K_img * np.array([
+                [1.0 / depth_scale, 1.0, 1.0 / depth_scale],
+                [1.0, 1.0 / depth_scale, 1.0 / depth_scale],
+                [1.0, 1.0, 1.0],
+            ])
+
+        np.save(out_dir / 'depth_map.npy', depth_map)
 
         pose = np.eye(4)
         cam_params = {
