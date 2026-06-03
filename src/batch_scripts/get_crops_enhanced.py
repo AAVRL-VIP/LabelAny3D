@@ -155,10 +155,19 @@ if __name__ == "__main__":
             label = label.replace(' (', ', ').replace(')', '')
             obj_id = f"{obj_idx}_{label.replace(' ', '_')}"
 
-            mask = binary_opening(masks[object_ids][obj_idx], np.ones((7, 7)))
-            if mask.sum() < 6400:
-                print(f"Skipped too small object: {obj_id}")
-                continue
+            # Use a mild 3x3 opening (was 7x7) since modern segmenters (SAM3 etc.)
+            # produce clean masks. 7x7 eroded thin objects (e.g. low coffee tables)
+            # below the area threshold and silently dropped them. If opening kills
+            # the mask, fall back to the original mask so the object survives.
+            mask = binary_opening(masks[object_ids][obj_idx], np.ones((3, 3)))
+            if mask.sum() < 4500:
+                orig = masks[object_ids][obj_idx].astype(bool)
+                if orig.sum() >= 4500:
+                    mask = orig
+                else:
+                    print(f"Skipped too small object: {obj_id} "
+                          f"(orig area={int(orig.sum())}, opened={int(mask.sum())})")
+                    continue
 
             selected_bboxes.append(bboxes[object_ids[obj_idx]])
 
