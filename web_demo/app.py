@@ -40,13 +40,12 @@ DEFAULT_USE_YOLO_SEG = 1
 DEFAULT_ONE_TON_CAPACITY_M3 = 6.0
 DEFAULT_FILL_RATE = 0.8
 DEFAULT_SAM3_PROMPTS = [
-    "chair", "table", "sofa", "bed", "desk", "mattress",
-    "cabinet", "shelf", "drawer", "tv", "monitor",
+    "chair", "table", "sofa", "bed", "desk",
+    "cabinet", "drawer", "tv", "monitor",
     "refrigerator", "microwave", "washing machine",
-    "oven", "bench", "furniture", "couch", "bookcase",
-    "fan", "storage_box", "box", "closet",
+    "oven", "bench", "couch", "bookcase", "closet",
     "air conditioner", "cooker", "wardrobe", "dresser",
-    "pantry shelf", "piano", "coffee table", "low table", "television",
+    "piano", "coffee table", "low table", "television",
 ]
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)

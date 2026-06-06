@@ -19,6 +19,97 @@ INDOOR_PROMPTS = [
 ]
 
 
+def _dilate(mask: np.ndarray, r: int) -> np.ndarray:
+    """4-connectivity binary dilation by r pixels (numpy-only, no scipy/cv2)."""
+    out = mask
+    for _ in range(int(r)):
+        s = out.copy()
+        s[1:, :] |= out[:-1, :]
+        s[:-1, :] |= out[1:, :]
+        s[:, 1:] |= out[:, :-1]
+        s[:, :-1] |= out[:, 1:]
+        out = s
+    return out
+
+
+def _bbox_overlap_ratio(a, b) -> float:
+    """Intersection area / smaller-box area for two xyxy boxes (0..1)."""
+    ix0 = max(a[0], b[0]); iy0 = max(a[1], b[1])
+    ix1 = min(a[2], b[2]); iy1 = min(a[3], b[3])
+    iw = max(0.0, ix1 - ix0); ih = max(0.0, iy1 - iy0)
+    inter = iw * ih
+    if inter <= 0:
+        return 0.0
+    area_a = max(0.0, (a[2] - a[0]) * (a[3] - a[1]))
+    area_b = max(0.0, (b[2] - b[0]) * (b[3] - b[1]))
+    smaller = min(area_a, area_b)
+    return inter / smaller if smaller > 0 else 0.0
+
+
+def _merge_same_class(items, gap_px: int, bbox_contain: float = 0.5):
+    """Merge same-class detections that touch, sit within gap_px, OR whose
+    bounding boxes overlap heavily (one largely inside the other).
+
+    items: list of (mask, label, score, bbox_xyxy).
+    Transitive (union-find): a chain of related same-class masks all collapse
+    into one. Merged mask = OR of members, score = max, bbox recomputed.
+    bbox_contain: merge if inter/smaller-bbox-area >= this (set <0 to disable).
+    Returns a new list sorted by descending score.
+    """
+    n = len(items)
+    if n <= 1 or (gap_px < 1 and bbox_contain < 0):
+        return items
+
+    dilated = [_dilate(it[0], gap_px) if gap_px >= 1 else None for it in items]
+    parent = list(range(n))
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            if items[i][1] != items[j][1]:
+                continue  # different class -> never merge
+            related = False
+            # (a) mask adjacency: dilated mask i intersects (raw) mask j
+            if dilated[i] is not None and np.logical_and(dilated[i], items[j][0]).any():
+                related = True
+            # (b) bbox overlap / containment of same class
+            elif bbox_contain >= 0 and _bbox_overlap_ratio(items[i][3], items[j][3]) >= bbox_contain:
+                related = True
+            if related:
+                union(i, j)
+
+    groups = {}
+    for i in range(n):
+        groups.setdefault(find(i), []).append(i)
+
+    merged = []
+    for idxs in groups.values():
+        if len(idxs) == 1:
+            merged.append(items[idxs[0]])
+            continue
+        m = np.zeros_like(items[idxs[0]][0])
+        for k in idxs:
+            m |= items[k][0]
+        label = items[idxs[0]][1]
+        score = max(items[k][2] for k in idxs)
+        ys, xs = np.where(m)
+        bbox = [float(xs.min()), float(ys.min()), float(xs.max()), float(ys.max())]
+        merged.append((m, label, score, bbox))
+
+    merged.sort(key=lambda d: -d[2])
+    return merged
+
+
 def _load_sam3(device: str):
     repo_root = Path(__file__).resolve().parents[1]
     sam3_repo = str((repo_root / "sam3").resolve())
@@ -178,6 +269,15 @@ def _start(args):
     if not filtered:
         print(json.dumps({"ok": False, "error": "all_filtered_out"}))
         return
+
+    # Merge same-class detections that overlap or sit right next to each other
+    # (e.g. a stack of drawers -> one drawer). NMS above only removes high-IoU
+    # duplicates; this handles adjacent-but-distinct instances of one class.
+    if getattr(args, "merge_same_class", True):
+        gap_px = args.merge_gap_px
+        if gap_px is None or gap_px < 0:
+            gap_px = max(4, int(round(0.012 * max(H, W))))  # auto: ~1.2% of long side
+        filtered = _merge_same_class(filtered, gap_px, bbox_contain=args.merge_bbox_contain)
 
     # keep top-k for usability
     max_instances = 12
@@ -486,6 +586,12 @@ def main():
     ap.add_argument("--new_label", default="furniture")
     ap.add_argument("--selected_indices", default="")
     ap.add_argument("--enabled", type=int)
+    ap.add_argument("--no_merge_same_class", dest="merge_same_class", action="store_false",
+                    default=True, help="Disable auto-merging of adjacent same-class masks.")
+    ap.add_argument("--merge_gap_px", type=int, default=-1,
+                    help="Max pixel gap to treat two same-class masks as one. -1 = auto (~1.2%% of long side).")
+    ap.add_argument("--merge_bbox_contain", type=float, default=0.5,
+                    help="Merge same-class if (bbox intersection / smaller bbox) >= this. <0 disables.")
     args = ap.parse_args()
 
     if args.action == "start":

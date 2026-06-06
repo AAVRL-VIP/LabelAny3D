@@ -38,7 +38,7 @@ YOLO_CLASS_PRESET="${YOLO_CLASS_PRESET:-indoor}"
 # Used by both YOLOE (USE_YOLO_SEG=1) and SAM3 (USE_SAM3=1) paths.
 # Edit this list once → both segmenters reflect the change.
 # ============================================================
-INDOOR_CLASSES_DEFAULT="chair,table,sofa,bed,desk,mattress,cabinet,shelf,drawer,tv,monitor,refrigerator,microwave,washing machine,oven,bench,couch,bookcase,fan,storage_box,box,closet,air conditioner,cooker,wardrobe,dresser,pantry shelf,piano,coffee table,low table,television, furniture," 
+INDOOR_CLASSES_DEFAULT="chair,table,sofa,bed,desk,cabinet,shelf,drawer,tv,monitor,refrigerator,microwave,washing machine,oven,bench,couch,bookcase,storage_box,closet,air conditioner,cooker,wardrobe,dresser,pantry shelf,piano,coffee table,low table"
 export INDOOR_CLASSES_DEFAULT
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
