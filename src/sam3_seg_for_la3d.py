@@ -33,13 +33,12 @@ from sam3.model.sam3_image_processor import Sam3Processor
 # Kept in sync intentionally so swapping USE_YOLO_SEG <-> USE_SAM3 doesn't shift
 # the category space the downstream pipeline sees.
 INDOOR_PROMPTS = [
-    "chair", "table", "sofa", "bed", "desk", "mattress",
-    "cabinet", "shelf", "drawer", "tv", "monitor",
+    "chair", "table", "sofa", "bed", "desk",
+    "cabinet", "drawer", "tv", "monitor",
     "refrigerator", "microwave", "washing machine",
-    "oven", "bench", "furniture", "couch", "bookcase",
-    "fan", "storage_box", "box", "closet",
+    "oven", "bench", "couch", "bookcase", "closet",
     "air conditioner", "cooker", "wardrobe", "dresser",
-    "pantry shelf", "piano", "coffee table", "low table", "television",
+    "piano", "coffee table", "low table", "television",
 ]
 
 FURNITURE_KEYWORDS = {

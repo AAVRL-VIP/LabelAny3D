@@ -1091,65 +1091,6 @@ startBtn.addEventListener('click', async () => {
   // multiple images: interact + commit EVERY image first, then process all
   await runSam3InteractiveBatchThenPipeline(files, interactOpts);
   return;
-
-  // Reset selection and navigate home for batch mode
-  selectedFiles = [];
-  renderPreviews();
-  startBtn.disabled = true;
-  showHome();
-
-  // Show running state in home panel
-  setHomeStatus('업로드 중...');
-  pipelineStatusEl.textContent = '실행중';
-  progressBar.style.width = '5%';
-  stageTextEl.textContent = '시작 중...';
-
-  // Add pending room card
-  const pendingCard = addRoomCard(files, null);
-
-  try {
-    const form = new FormData();
-    for (const f of files) form.append('images', f);
-    form.append('from_elevator', fromElevatorVal);
-    form.append('from_floor', fromFloorVal);
-    form.append('to_elevator', toElevatorVal);
-    form.append('to_floor', toFloorVal);
-    form.append('distance_km', distKmVal);
-
-    const res = await fetchJson('/api/jobs/batch', { method: 'POST', body: form });
-    batchJobIds = (res.jobs || []).map(j => j.job_id);
-    if (!batchJobIds.length) throw new Error('생성된 작업이 없습니다.');
-
-    let doneCount = 0, failCount = 0;
-    for (let i = 0; i < batchJobIds.length; i++) {
-      const jobId = batchJobIds[i];
-      currentJobId = jobId;
-      const result = await waitJob(jobId, i + 1, batchJobIds.length);
-      if (result) doneCount++;
-      else failCount++;
-    }
-
-    if (doneCount > 0) {
-      const agg = await fetchJson('/api/jobs/batch/aggregate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_ids: batchJobIds }),
-      });
-      renderHomeSummary(agg.summary, agg);
-      updateRoomCard(pendingCard, files, agg.summary, 'done');
-      setHomeStatus(`배치 분석 완료 (성공 ${doneCount}건${failCount ? ', 실패 '+failCount+'건' : ''})`);
-      pipelineStatusEl.textContent = failCount > 0 ? '부분완료' : '완료';
-    } else {
-      setHomeStatus('분석에 실패했습니다.', true);
-      pipelineStatusEl.textContent = '실패';
-      updateRoomCard(pendingCard, files, null, 'failed');
-    }
-  } catch (err) {
-    setHomeStatus(`오류: ${err.message}`, true);
-    pipelineStatusEl.textContent = '실패';
-    updateRoomCard(pendingCard, files, null, 'failed');
-  }
-  progressBar.style.width = '100%';
 });
 
 // One interactive SAM3 session for a single file: start → open modal →
