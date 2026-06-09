@@ -9,10 +9,13 @@ set -euo pipefail
 # Sequential: [6] 3D reconstruction
 # Sequential: [7] scene layout alignment
 #
+# Segmentation is handled exclusively by SAM3.
+#
 # Usage:
 #   bash run_single_full_pipeline_parallel.sh /abs/path/image.jpg
 # Optional env:
-#   GPU_IDX=0 OBJ_REC=trellis MIN_MASK_AREA=6400 USE_YOLO_SEG=1 YOLO_SEG_MODEL=yoloe-26l-seg.pt
+#   GPU_IDX=0 OBJ_REC=amodal3r MIN_MASK_AREA=800 SAM3_PROMPTS=... SAM3_CONF=0.5
+#   SAM_PYTHON=/opt/conda/envs/sam/bin/python
 
 if [[ $# -lt 1 ]]; then
   echo "Usage: bash run_single_full_pipeline_parallel.sh /abs/path/image.jpg"
@@ -22,16 +25,17 @@ fi
 IMAGE_PATH="$1"
 GPU_IDX="${GPU_IDX:-0}"
 OBJ_REC="${OBJ_REC:-amodal3r}"
-MIN_MASK_AREA="${MIN_MASK_AREA:-6400}"
+MIN_MASK_AREA="${MIN_MASK_AREA:-800}"
 SKIP_SEG="${SKIP_SEG:-0}"
 KEEP_LABELS="${KEEP_LABELS:-}"
-USE_YOLO_SEG="${USE_YOLO_SEG:-0}"
-YOLO_SEG_MODEL="${YOLO_SEG_MODEL:-yoloe-26l-seg.pt}"
-YOLO_CONF="${YOLO_CONF:-0.35}"
-YOLO_IOU="${YOLO_IOU:-0.70}"
-YOLO_MAX_DET="${YOLO_MAX_DET:-300}"
-YOLO_CLASSES="${YOLO_CLASSES:-}"
-YOLO_CLASS_PRESET="${YOLO_CLASS_PRESET:-indoor}"
+SAM_PYTHON="${SAM_PYTHON:-/opt/conda/envs/sam/bin/python}"
+
+# ============================================================
+# Single source of truth: indoor furniture keyword list.
+# Used as the default SAM3 prompt set (SAM3_PROMPTS).
+# ============================================================
+INDOOR_CLASSES_DEFAULT="chair,table,sofa,bed,desk,cabinet,drawer,tv,monitor,refrigerator,microwave,washing machine,oven,bench,couch,bookcase,closet,air conditioner,cooker,wardrobe,dresser,piano,coffee table,low table,television"
+export INDOOR_CLASSES_DEFAULT
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -58,13 +62,6 @@ export INPUT_DST="$RESULT_SCENE_DIR/input.png"
 export MIN_MASK_AREA
 export RESULT_SCENE_DIR
 export KEEP_LABELS
-export USE_YOLO_SEG
-export YOLO_SEG_MODEL
-export YOLO_CONF
-export YOLO_IOU
-export YOLO_MAX_DET
-export YOLO_CLASSES
-export YOLO_CLASS_PRESET
 
 python - <<'PY'
 from PIL import Image, ImageOps
@@ -131,273 +128,24 @@ if [[ "$SKIP_SEG" == "1" ]]; then
     cp -f "$SEG_JSON" "$COCO_VAL_JSON"
   fi
 else
-  echo "[1/7] Generating single-image COCONUT-style annotation..."
-  # (segmentation inline script unchanged — keeping it inline for self-containedness)
-python - <<'PY'
-import json
-import os
-from pathlib import Path
-
-import cv2
-import numpy as np
-import rembg
-from PIL import Image, ImageOps
-from pycocotools import mask as mask_utils
-
-from model_wrappers import run_entityv2, run_clipseg, run_ovsam, run_yolo_seg
-
-import random
-import torch
-
-seed = 7
-random.seed(seed)
-np.random.seed(seed)
-torch.manual_seed(seed)
-torch.cuda.manual_seed_all(seed)
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
-
-
-repo = Path.cwd().parent
-image_path = Path(os.environ["IMAGE_PATH"]).resolve()
-img_name = image_path.name
-min_mask_area = int(os.environ.get("MIN_MASK_AREA", "6400"))
-keep_labels_raw = os.environ.get("KEEP_LABELS", "")
-keep_labels = {x.strip().lower() for x in keep_labels_raw.split(",") if x.strip()}
-use_yolo_seg = os.environ.get("USE_YOLO_SEG", "0") == "1"
-yolo_model = os.environ.get("YOLO_SEG_MODEL", "yoloe-26l-seg.pt")
-yolo_conf = float(os.environ.get("YOLO_CONF", "0.45"))
-yolo_iou = float(os.environ.get("YOLO_IOU", "0.55"))
-yolo_max_det = int(os.environ.get("YOLO_MAX_DET", "300"))
-yolo_classes_raw = os.environ.get("YOLO_CLASSES", "")
-yolo_classes = [x.strip() for x in yolo_classes_raw.split(",") if x.strip()]
-yolo_class_preset = os.environ.get("YOLO_CLASS_PRESET", "indoor").strip().lower()
-
-if not yolo_classes and yolo_class_preset == "indoor":
-    yolo_classes = [
-        "chair", "table", "sofa", "bed", "desk", "mattress",
-        "cabinet", "shelf", "drawer", "tv", "monitor",
-        "refrigerator", "microwave", "washing machine",
-        "oven", "bench", "furniture", "couch", "bookcase", 
-        "blanket", "fan", "storage_box", "box", "closet", 
-        "air conditioner", "cooker", "wardrobe", "dresser",
-        "pantry shelf", "piano", "coffee table", "low table", "television"
-    ]
-furniture_keywords = {
-    # 소파/의자류
-    "furniture", "sofa", "couch", "chair", "stool", "bench",
-    "ottoman", "futon", "recliner", "loveseat",
-    # 테이블/책상류
-    "table", "desk",
-    # 수납류
-    "cabinet", "drawer", "shelf", "bookcase", "wardrobe",
-    "dresser", "cupboard", "locker",
-    # 침실류
-    "bed", "mattress", "crib",
-    # 가전류
-    "refrigerator", "washer", "dryer", "dishwasher",
-    "microwave", "oven", "stove", "television", "monitor",
-    "air_conditioner", "vacuum",
-    # 기타
-    "piano", "ironing_board",
-}
-
-result_scene_dir = Path(os.environ["RESULT_SCENE_DIR"]).resolve()
-seg_dir = result_scene_dir / "segmentation"
-seg_dir.mkdir(parents=True, exist_ok=True)
-
-ann_path = repo / "dataset" / "coco" / "annotations" / "coconut_val.json"
-img = ImageOps.exif_transpose(Image.open(image_path)).convert("RGB")
-img_np = np.array(img)
-H, W = img_np.shape[:2]
-
-masks = []
-labels = []
-
-if use_yolo_seg:
-    try:
-        masks, labels = run_yolo_seg(
-            img_np,
-            model_path=yolo_model,
-            conf=yolo_conf,
-            iou=yolo_iou,
-            classes=yolo_classes if yolo_classes else None,
-            max_det=yolo_max_det,
-        )
-        print(f"YOLO segmentation produced {len(masks)} masks (model={yolo_model}, classes={len(yolo_classes) if yolo_classes else 'all'})")
-    except Exception as e:
-        print(f"YOLO segmentation failed, switching to EntityV2 pipeline: {e}")
-        masks = []
-        labels = []
-
-if not use_yolo_seg and len(masks) == 0:
-    try:
-        seg_masks = run_entityv2(img_np, threshold=0.1, max_size=1500)
-        if len(seg_masks) > 0:
-            fg_idx, _ = run_clipseg(img, seg_masks)
-            if len(fg_idx) > 0:
-                masks = [seg_masks[i] for i in fg_idx]
-                try:
-                    labels = run_ovsam(img, np.array(masks).astype(np.uint8) * 255)
-                except Exception as e:
-                    print(f"OVSAM failed, falling back to generic labels: {e}")
-                    labels = ["object"] * len(masks)
-    except Exception as e:
-        print(f"EntityV2/CLIPSeg pipeline failed, switching to rembg fallback: {e}")
-        masks = []
-        labels = []
-
-if len(masks) == 0:
-    rgba = np.array(rembg.remove(img, rembg.new_session("isnet-general-use")))
-    fg = (rgba[..., 3] > 127).astype(np.uint8)
-    num_labels, cc = cv2.connectedComponents(fg, connectivity=8)
-    comp_masks = []
-    for comp_id in range(1, num_labels):
-        m = cc == comp_id
-        area = int(m.sum())
-        if area >= min_mask_area:
-            comp_masks.append(m)
-    if len(comp_masks) > 0:
-        masks = comp_masks
-        labels = ["object"] * len(masks)
-        print(f"rembg fallback produced {len(masks)} connected components")
-    elif fg.sum() >= min_mask_area:
-        masks = [fg.astype(bool)]
-        labels = ["object"]
-
-annotations = []
-categories = []
-category_to_id = {}
-ann_id = 1
-seg_vis = []
-
-if len(labels) != len(masks):
-    labels = ["object"] * len(masks)
-
-for i, m in enumerate(masks):
-    m = np.asarray(m).astype(np.uint8)
-    if m.sum() < min_mask_area:
-        continue
-    # 경계에 걸친 마스크 제외
-    ys, xs = np.where(m > 0)
-    if len(xs) == 0:
-        continue
-
-    x1, x2 = int(xs.min()), int(xs.max())
-    y1, y2 = int(ys.min()), int(ys.max())
-
-    # 너무 많이 경계에 걸친 마스크만 제외
-    border_px = int(os.environ.get("BORDER_PX", "20"))
-    max_border_ratio = float(os.environ.get("MAX_BORDER_RATIO", "0.20"))
-
-    border_region = np.zeros_like(m, dtype=bool)
-    border_region[:border_px, :] = True
-    border_region[-border_px:, :] = True
-    border_region[:, :border_px] = True
-    border_region[:, -border_px:] = True
-
-    mask_bool = m.astype(bool)
-    mask_area = float(mask_bool.sum())
-    border_area = float((mask_bool & border_region).sum())
-    border_ratio = border_area / max(mask_area, 1.0)
-
-    touch_left = x1 <= 0
-    touch_right = x2 >= W - 1
-    touch_top = y1 <= 0
-    touch_bottom = y2 >= H - 1
-    touch_count = sum([touch_left, touch_right, touch_top, touch_bottom])
-
-    # 삭제 조건:
-    # 1) 경계 근처에 mask 면적이 너무 많거나
-    # 2) 이미지 코너/여러 경계에 심하게 걸린 경우
-    if border_ratio > max_border_ratio and touch_count >= 2:
-        continue
-    ys, xs = np.where(m > 0)
-    if len(xs) == 0:
-        continue
-    raw_label = str(labels[i]).strip() if i < len(labels) else "object"
-    label = raw_label if raw_label else "object"
-    if keep_labels:
-        label_l = label.lower()
-        matched = False
-        for k in keep_labels:
-            if k == "furniture":
-                if any(w in label_l for w in furniture_keywords):
-                    matched = True
-                    break
-            if k in label_l:
-                matched = True
-                break
-        if not matched:
-            continue
-    if label not in category_to_id:
-        category_id = len(category_to_id) + 1
-        category_to_id[label] = category_id
-        categories.append({"id": category_id, "name": label, "supercategory": "object"})
-    category_id = category_to_id[label]
-    x1, x2 = int(xs.min()), int(xs.max())
-    y1, y2 = int(ys.min()), int(ys.max())
-    bbox = [float(x1), float(y1), float(x2 - x1 + 1), float(y2 - y1 + 1)]
-    area = float(m.sum())
-    rle = mask_utils.encode(np.asfortranarray(m))
-    counts = rle["counts"]
-    if isinstance(counts, (bytes, bytearray)):
-        counts = counts.decode("utf-8")
-    annotations.append({
-        "id": ann_id, "image_id": 1, "category_id": category_id,
-        "category_name": label, "bbox": bbox, "area": area, "iscrowd": 0,
-        "segmentation": {"size": [H, W], "counts": counts},
-    })
-    seg_vis.append({
-        "ann_id": ann_id, "label": label, "category_id": category_id,
-        "bbox": bbox, "area": area, "mask": m.astype(bool),
-    })
-    ann_id += 1
-
-payload = {
-    "images": [{"id": 1, "file_name": img_name, "width": W, "height": H}],
-    "annotations": annotations,
-    "categories": categories,
-}
-ann_path.parent.mkdir(parents=True, exist_ok=True)
-with open(ann_path, "w") as f:
-    json.dump(payload, f)
-
-overlay = img_np.copy().astype(np.uint8)
-seg_index = []
-for idx, item in enumerate(seg_vis):
-    mask = item["mask"]
-    color = np.array([(37*(idx+3))%256, (97*(idx+5))%256, (17*(idx+7))%256], dtype=np.uint8)
-    mask_u8 = (mask.astype(np.uint8) * 255)
-    safe_label = ''.join(c if c.isalnum() or c in ('-','_') else '_' for c in item["label"])
-    mask_name = f"mask_{idx:02d}_{safe_label}.png"
-    cv2.imwrite(str(seg_dir / mask_name), mask_u8)
-    overlay[mask] = (0.55 * overlay[mask] + 0.45 * color).astype(np.uint8)
-    x, y, w, h = item["bbox"]
-    x, y, w, h = int(x), int(y), int(w), int(h)
-    cv2.rectangle(overlay, (x, y), (x+w, y+h), tuple(int(v) for v in color.tolist()), 2)
-    cv2.putText(overlay, item["label"], (x, max(20, y-6)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, tuple(int(v) for v in color.tolist()), 2)
-    seg_index.append({
-        "ann_id": item["ann_id"], "label": item["label"], "category_id": item["category_id"],
-        "bbox": item["bbox"], "area": item["area"], "mask_file": mask_name,
-    })
-Image.fromarray(overlay).save(seg_dir / "overlay.png")
-with open(seg_dir / "labels.json", "w") as f:
-    json.dump(seg_index, f, indent=2)
-
-if keep_labels:
-    print(f"Label filter KEEP_LABELS: {sorted(keep_labels)}")
-print(f"Saved: {ann_path}")
-print(f"Segmentation preview: {seg_dir / 'overlay.png'}")
-print(f"Num instances: {len(annotations)}")
-if len(annotations) == 0:
-    if keep_labels:
-        print("가구가 감지되지 않았습니다. 소파, 침대, 테이블 등 큰 가구가 잘 보이도록 촬영해주세요.")
-        import sys
-        sys.exit(0)
-    else:
-        raise RuntimeError("No valid segmentation instances were produced.")
-PY
+  echo "[1/7] Generating single-image COCONUT-style annotation via SAM3 (sam env)..."
+  SAM3_PROMPTS="${SAM3_PROMPTS:-$INDOOR_CLASSES_DEFAULT}"
+  SAM3_CONF="${SAM3_CONF:-0.5}"
+  INTERACTIVE_SAM3="${INTERACTIVE_SAM3:-0}"
+  SAM3_SCRIPT="$REPO/src/sam3_seg_for_la3d.py"
+  if [[ ! -f "$SAM3_SCRIPT" ]]; then
+    echo "SAM3 script not found: $SAM3_SCRIPT"
+    exit 1
+  fi
+  env -u PYTHONPATH "$SAM_PYTHON" "$SAM3_SCRIPT" \
+    --image "$IMAGE_PATH" \
+    --out_json "$COCO_VAL_JSON" \
+    --out_seg_dir "$RESULT_SCENE_DIR/segmentation" \
+    --prompts "$SAM3_PROMPTS" \
+    --keep_labels "$KEEP_LABELS" \
+    --min_mask_area "$MIN_MASK_AREA" \
+    --confidence "$SAM3_CONF" \
+    $( [[ "$INTERACTIVE_SAM3" == "1" ]] && echo "--interactive" )
 fi
 T1_ELAPSED=$(( SECONDS - T1_START ))
 echo "1_segmentation=${T1_ELAPSED}" >> "$TIMING_FILE"

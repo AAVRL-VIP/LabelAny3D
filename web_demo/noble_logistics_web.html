@@ -670,7 +670,11 @@ body { font-family: 'Noto Sans KR', sans-serif; background: #f0f4f8; color: #1a1
         </div>
         <div class="guideline-text">
           <strong>촬영 가이드라인</strong>
-          소파, 침대, 옷장 등 큰 가구가 사진 가장자리에서 잘리지 않게 찍어주세요.
+          <ul style="margin:6px 0 0;padding-left:18px;">
+            <li>소파, 침대, 옷장 등 큰 가구가 사진 가장자리에서 잘리지 않게 찍어주세요.</li>
+            <li>정면보다는 가구의 측면(약 45°)에서 찍어주세요.</li>
+            <li>옷장이나 서랍의 문을 닫은 채로 찍어주세요.</li>
+          </ul>
         </div>
       </div>
 
@@ -865,6 +869,27 @@ body { font-family: 'Noto Sans KR', sans-serif; background: #f0f4f8; color: #1a1
   </div>
 </div><!-- /viewUpload -->
 
+<div id="sam3Modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+  <div style="width:min(1200px,96vw);height:min(92vh,900px);background:#fff;border-radius:16px;display:flex;flex-direction:column;overflow:hidden;">
+    <div style="padding:12px 16px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-weight:700;color:#111827;">SAM3 인터랙티브 보정</div>
+      <button id="sam3CloseBtn" style="border:none;background:#111827;color:#fff;border-radius:8px;padding:6px 10px;cursor:pointer;">닫기</button>
+    </div>
+    <div id="sam3HelpText" style="padding:12px 16px;font-size:13px;color:#4b5563;">선택된 객체 위 클릭: 체크 해제, 빈 공간 클릭: 새 객체 생성, 다른 객체 클릭: 선택 전환</div>
+    <div id="sam3ThumbStrip" style="display:none;gap:8px;padding:8px 16px;border-bottom:1px solid #e5e7eb;overflow-x:auto;white-space:nowrap;"></div>
+    <div style="flex:1;display:flex;min-height:0;">
+      <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;background:#f9fafb;">
+        <img id="sam3OverlayImg" src="" alt="sam3 overlay" style="max-width:100%;max-height:100%;object-fit:contain;cursor:crosshair;" />
+      </div>
+      <div style="width:280px;border-left:1px solid #e5e7eb;padding:12px;overflow:auto;">
+        <div style="font-size:12px;color:#6b7280;margin-bottom:8px;">인스턴스 목록</div>
+        <div id="sam3InstanceList" style="display:flex;flex-direction:column;gap:6px;"></div>
+        <button id="sam3CommitBtn" style="margin-top:12px;width:100%;border:none;background:#2563eb;color:#fff;border-radius:8px;padding:10px;cursor:pointer;">보정 완료 후 계속 실행</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 
 <script>
 /* ── View Switching ── */
@@ -893,6 +918,9 @@ const logBtn          = document.getElementById('logBtn');
 
 let currentJobId = null;
 let batchJobIds  = [];
+let sam3Session = null;
+let sam3CurrentIdx = 0;
+let sam3SelectedIndices = new Set();
 
 /* ── File Selection ── */
 const fileInput   = document.getElementById('fileInput');
@@ -1046,39 +1074,159 @@ startBtn.addEventListener('click', async () => {
   const toFloorVal      = document.getElementById('toFloor').value;
   const distKmVal       = document.getElementById('distanceKm').value;
 
-  // Reset selection and navigate home
+  const interactOpts = {
+    from_elevator: fromElevatorVal,
+    from_floor: fromFloorVal,
+    to_elevator: toElevatorVal,
+    to_floor: toFloorVal,
+    distance_km: distKmVal,
+  };
+
+  // single image: SAM3 interactive flow first
+  if (files.length === 1) {
+    await runSam3InteractiveThenPipeline(files[0], interactOpts);
+    return;
+  }
+
+  // multiple images: interact + commit EVERY image first, then process all
+  await runSam3InteractiveBatchThenPipeline(files, interactOpts);
+  return;
+});
+
+// One interactive SAM3 session for a single file: start → open modal →
+// wait for the user to refine and press commit. Returns the commit response.
+// deferred=true commits the segmentation WITHOUT running the pipeline
+// (used by the multi-image flow so every image is corrected first).
+async function runSam3InteractiveStep(file, opts, { deferred = false, commitLabel = null } = {}) {
+  const form = new FormData();
+  form.append('image', file);
+  const start = await fetchJson('/api/sam3/interactive/start', { method: 'POST', body: form });
+  sam3Session = start.session_id;
+  sam3CurrentIdx = start.current_idx || 0;
+  openSam3Modal(start);
+
+  const commitBtn = document.getElementById('sam3CommitBtn');
+  const closeBtn = document.getElementById('sam3CloseBtn');
+  const prevLabel = commitBtn.textContent;
+  if (commitLabel) commitBtn.textContent = commitLabel;
+
+  try {
+    return await new Promise((resolve, reject) => {
+      const onCommit = async () => {
+        commitBtn.disabled = true;
+        try {
+          const commitForm = new FormData();
+          commitForm.append('scene_name', file.name.replace(/\.[^.]+$/, ''));
+          commitForm.append('selected_indices', Array.from(sam3SelectedIndices).sort((a,b)=>a-b).join(','));
+          commitForm.append('auto_run_pipeline', deferred ? 'false' : 'true');
+          commitForm.append('from_elevator', String(opts.from_elevator));
+          commitForm.append('from_floor', String(opts.from_floor));
+          commitForm.append('to_elevator', String(opts.to_elevator));
+          commitForm.append('to_floor', String(opts.to_floor));
+          commitForm.append('distance_km', String(opts.distance_km));
+          const resp = await fetchJson(`/api/sam3/interactive/${sam3Session}/commit`, { method: 'POST', body: commitForm });
+          resolve(resp);
+        } catch (e) {
+          reject(e);
+        } finally {
+          commitBtn.disabled = false;
+          closeSam3Modal();
+        }
+      };
+      const onClose = () => { closeSam3Modal(); reject(new Error('인터랙티브 보정이 취소되었습니다.')); };
+      commitBtn.onclick = onCommit;
+      closeBtn.onclick = onClose;
+    });
+  } finally {
+    commitBtn.textContent = prevLabel;
+  }
+}
+
+// Multi-image: interact + commit EVERY image first (no pipeline yet), then run
+// the downstream pipeline for all of them at once and aggregate.
+async function runSam3InteractiveBatchThenPipeline(files, opts) {
   selectedFiles = [];
   renderPreviews();
   startBtn.disabled = true;
   showHome();
-
-  // Show running state in home panel
-  setHomeStatus('업로드 중...');
-  pipelineStatusEl.textContent = '실행중';
-  progressBar.style.width = '5%';
-  stageTextEl.textContent = '시작 중...';
-
-  // Add pending room card
+  pipelineStatusEl.textContent = '사용자 보정중';
+  progressBar.style.width = '3%';
+  stageTextEl.textContent = '세그멘테이션 준비';
   const pendingCard = addRoomCard(files, null);
 
   try {
-    const form = new FormData();
-    for (const f of files) form.append('images', f);
-    form.append('from_elevator', fromElevatorVal);
-    form.append('from_floor', fromFloorVal);
-    form.append('to_elevator', toElevatorVal);
-    form.append('to_floor', toFloorVal);
-    form.append('distance_km', distKmVal);
+    // Phase 1: run SAM3 segmentation for EVERY image up front (no correction yet).
+    // If SAM3 fails on some images, skip only those images and continue with successful ones.
+    const sessionObjs = [];
+    const failedStarts = [];
 
-    const res = await fetchJson('/api/jobs/batch', { method: 'POST', body: form });
+    for (let i = 0; i < files.length; i++) {
+      setHomeStatus(`세그멘테이션 중 ${i + 1}/${files.length}: ${files[i].name}`);
+      progressBar.style.width = `${Math.round((i / files.length) * 22) + 3}%`;
+
+      const form = new FormData();
+      form.append('image', files[i]);
+
+      // Detection score cutoff for SAM3 segmentation.
+      form.append('confidence', '0.35');
+
+      try {
+        const start = await fetchJson('/api/sam3/interactive/start', { method: 'POST', body: form });
+        sessionObjs.push({
+          file: files[i],
+          session_id: start.session_id,
+          overlay_url: start.overlay_url,
+          instances: start.instances || [],
+          selected: new Set((start.instances || []).map(it => it.index)),
+          currentIdx: start.current_idx || 0,
+        });
+      } catch (e) {
+        failedStarts.push({ file: files[i], error: e.message });
+        console.warn(`[SAM3] start failed: ${files[i].name}`, e);
+      }
+    }
+
+    if (!sessionObjs.length) {
+      throw new Error(`모든 이미지에서 SAM3 세그멘테이션이 실패했습니다: ${failedStarts.map(x => x.file.name).join(', ')}`);
+    }
+
+    if (failedStarts.length) {
+      setHomeStatus(
+        `일부 이미지 SAM3 실패: ${failedStarts.map(x => x.file.name).join(', ')} / 성공한 ${sessionObjs.length}장만 보정합니다.`,
+        true
+      );
+      await new Promise(r => setTimeout(r, 1500));
+    }
+
+    // Phase 2: correct ALL images at once (switch via thumbnails), then commit all.
+    setHomeStatus(`모든 이미지(${files.length}장) 세그멘테이션 완료. 썸네일로 전환하며 보정 후 "전체 보정 완료"를 누르세요.`);
+    pipelineStatusEl.textContent = '사용자 보정중';
+    progressBar.style.width = '26%';
+    const sessions = await openSam3MultiModal(sessionObjs, opts);
+
+    // Phase 3: run the pipeline for all committed sessions at once (serialized).
+    setHomeStatus('모든 이미지 보정 완료. 파이프라인 일괄 실행 중...');
+    pipelineStatusEl.textContent = '실행중';
+    progressBar.style.width = '30%';
+    const res = await fetchJson('/api/jobs/run_committed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessions,
+        from_elevator: opts.from_elevator === 'true' || opts.from_elevator === true,
+        from_floor: parseInt(opts.from_floor, 10) || 1,
+        to_elevator: opts.to_elevator === 'true' || opts.to_elevator === true,
+        to_floor: parseInt(opts.to_floor, 10) || 1,
+        distance_km: parseFloat(opts.distance_km) || 10.0,
+      }),
+    });
     batchJobIds = (res.jobs || []).map(j => j.job_id);
     if (!batchJobIds.length) throw new Error('생성된 작업이 없습니다.');
 
     let doneCount = 0, failCount = 0;
     for (let i = 0; i < batchJobIds.length; i++) {
-      const jobId = batchJobIds[i];
-      currentJobId = jobId;
-      const result = await waitJob(jobId, i + 1, batchJobIds.length);
+      currentJobId = batchJobIds[i];
+      const result = await waitJob(batchJobIds[i], i + 1, batchJobIds.length);
       if (result) doneCount++;
       else failCount++;
     }
@@ -1091,20 +1239,362 @@ startBtn.addEventListener('click', async () => {
       });
       renderHomeSummary(agg.summary, agg);
       updateRoomCard(pendingCard, files, agg.summary, 'done');
-      setHomeStatus(`배치 분석 완료 (성공 ${doneCount}건${failCount ? ', 실패 '+failCount+'건' : ''})`);
+      setHomeStatus(`배치 분석 완료 (성공 ${doneCount}건${failCount ? ', 실패 ' + failCount + '건' : ''})`);
       pipelineStatusEl.textContent = failCount > 0 ? '부분완료' : '완료';
     } else {
       setHomeStatus('분석에 실패했습니다.', true);
       pipelineStatusEl.textContent = '실패';
       updateRoomCard(pendingCard, files, null, 'failed');
     }
+    progressBar.style.width = '100%';
   } catch (err) {
     setHomeStatus(`오류: ${err.message}`, true);
     pipelineStatusEl.textContent = '실패';
     updateRoomCard(pendingCard, files, null, 'failed');
+    closeSam3Modal();
   }
-  progressBar.style.width = '100%';
-});
+}
+
+async function runSam3InteractiveThenPipeline(file, opts) {
+  selectedFiles = [];
+  renderPreviews();
+  startBtn.disabled = true;
+  showHome();
+  setHomeStatus('SAM3 인터랙티브 세션 시작 중...');
+  pipelineStatusEl.textContent = '준비중';
+  progressBar.style.width = '3%';
+  stageTextEl.textContent = '세그멘테이션 준비';
+
+  const pendingCard = addRoomCard([file], null);
+  try {
+    const form = new FormData();
+    form.append('image', file);
+    const start = await fetchJson('/api/sam3/interactive/start', { method: 'POST', body: form });
+    sam3Session = start.session_id;
+    sam3CurrentIdx = start.current_idx || 0;
+    openSam3Modal(start);
+    setHomeStatus('SAM3 클릭 보정 후 "보정 완료 후 계속 실행" 버튼을 눌러주세요.');
+    pipelineStatusEl.textContent = '사용자 보정중';
+
+    const jobId = await new Promise((resolve, reject) => {
+      const commitBtn = document.getElementById('sam3CommitBtn');
+      const closeBtn = document.getElementById('sam3CloseBtn');
+      const onCommit = async () => {
+        commitBtn.disabled = true;
+        try {
+          const commitForm = new FormData();
+          commitForm.append('scene_name', file.name.replace(/\.[^.]+$/, ''));
+          commitForm.append('selected_indices', Array.from(sam3SelectedIndices).sort((a,b)=>a-b).join(','));
+          commitForm.append('auto_run_pipeline', 'true');
+          commitForm.append('from_elevator', String(opts.from_elevator));
+          commitForm.append('from_floor', String(opts.from_floor));
+          commitForm.append('to_elevator', String(opts.to_elevator));
+          commitForm.append('to_floor', String(opts.to_floor));
+          commitForm.append('distance_km', String(opts.distance_km));
+          const resp = await fetchJson(`/api/sam3/interactive/${sam3Session}/commit`, { method: 'POST', body: commitForm });
+          resolve(resp.job_id);
+        } catch (e) {
+          reject(e);
+        } finally {
+          closeSam3Modal();
+        }
+      };
+      const onClose = () => reject(new Error('인터랙티브 보정이 취소되었습니다.'));
+      commitBtn.onclick = onCommit;
+      closeBtn.onclick = onClose;
+    });
+
+    currentJobId = jobId;
+    setHomeStatus('파이프라인 실행 중...');
+    pipelineStatusEl.textContent = '실행중';
+    progressBar.style.width = '8%';
+    const result = await waitJob(jobId, 1, 1);
+    if (!result) throw new Error('파이프라인 실행 실패');
+    const agg = {
+      volume_breakdown: [{ image_name: file.name, volume_m3: result.total_volume_m3, elapsed_sec: 0 }],
+      volume_total_m3: result.total_volume_m3,
+      elapsed_total_sec: Number(elapsedSecEl.textContent || 0),
+      summary: result,
+    };
+    renderHomeSummary(result, agg);
+    updateRoomCard(pendingCard, [file], result, 'done');
+    pipelineStatusEl.textContent = '완료';
+    setHomeStatus('완료');
+    progressBar.style.width = '100%';
+  } catch (err) {
+    setHomeStatus(`오류: ${err.message}`, true);
+    pipelineStatusEl.textContent = '실패';
+    updateRoomCard(pendingCard, [file], null, 'failed');
+    closeSam3Modal();
+  }
+}
+
+function openSam3Modal(startData) {
+  const modal = document.getElementById('sam3Modal');
+  const overlayImg = document.getElementById('sam3OverlayImg');
+  const list = document.getElementById('sam3InstanceList');
+  const help = document.getElementById('sam3HelpText');
+  modal.style.display = 'flex';
+  const reloadOverlay = () => {
+    overlayImg.src = `${startData.overlay_url}?t=${Date.now()}`;
+  };
+  const renderInstanceList = (instances) => {
+    let selectedBtn = null;
+    list.innerHTML = '';
+    const valid = new Set((instances || []).map(it => it.index));
+    sam3SelectedIndices = new Set([...sam3SelectedIndices].filter(i => valid.has(i)));
+    (instances || []).forEach(it => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;';
+    const chk = document.createElement('input');
+    chk.type = 'checkbox';
+    const isEnabled = (typeof it.enabled === 'boolean') ? it.enabled : sam3SelectedIndices.has(it.index);
+    chk.checked = isEnabled;
+    if (isEnabled) sam3SelectedIndices.add(it.index); else sam3SelectedIndices.delete(it.index);
+    chk.onchange = async () => {
+      const data = await fetchJson(`/api/sam3/interactive/${sam3Session}/set_enabled`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instance_index: it.index, enabled: chk.checked })
+      });
+      if (chk.checked) sam3SelectedIndices.add(it.index);
+      else sam3SelectedIndices.delete(it.index);
+      if (Array.isArray(data.instances)) renderInstanceList(data.instances);
+      reloadOverlay();
+    };
+    const btn = document.createElement('button');
+    btn.textContent = `#${it.index} ${it.label} (${it.score.toFixed(2)})`;
+    btn.style.cssText = 'flex:1;text-align:left;border:1px solid #d1d5db;border-radius:8px;padding:8px;background:#fff;cursor:pointer;';
+    if (it.index === sam3CurrentIdx) {
+      btn.style.borderColor = '#2563eb';
+      btn.style.background = '#eff6ff';
+      selectedBtn = btn;
+    }
+    btn.onclick = async () => {
+      if (selectedBtn) {
+        selectedBtn.style.borderColor = '#d1d5db';
+        selectedBtn.style.background = '#fff';
+      }
+      btn.style.borderColor = '#2563eb';
+      btn.style.background = '#eff6ff';
+      selectedBtn = btn;
+      sam3CurrentIdx = it.index;
+      await fetchJson(`/api/sam3/interactive/${sam3Session}/select`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instance_index: it.index })
+      });
+      help.textContent = `선택: #${it.index} ${it.label} | 선택 객체 클릭=체크해제`;
+      reloadOverlay();
+    };
+    row.appendChild(chk);
+    row.appendChild(btn);
+    list.appendChild(row);
+    });
+  };
+  sam3SelectedIndices = new Set((startData.instances || []).map(it => it.index));
+  renderInstanceList(startData.instances || []);
+  overlayImg.onmousedown = async (e) => {
+    if (e.button !== 0 && e.button !== 2) return;
+    e.preventDefault();
+    if (!overlayImg.naturalWidth || !overlayImg.naturalHeight) return;
+    const rect = overlayImg.getBoundingClientRect();
+    const sx = (e.clientX - rect.left) / rect.width;
+    const sy = (e.clientY - rect.top) / rect.height;
+    const x = Math.max(0, Math.round(sx * overlayImg.naturalWidth));
+    const y = Math.max(0, Math.round(sy * overlayImg.naturalHeight));
+    const data = await fetchJson(`/api/sam3/interactive/${sam3Session}/tap`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ x, y, label: 1, instance_index: sam3CurrentIdx, new_label: 'furniture' })
+    });
+    if (typeof data.current_idx === 'number') sam3CurrentIdx = data.current_idx;
+    if (data.action === 'toggled_off') {
+      help.textContent = '선택 객체가 제외(체크 해제)되었습니다.';
+      if (typeof data.toggled_index === 'number') sam3SelectedIndices.delete(data.toggled_index);
+    }
+    else if (data.action === 'toggled_on') {
+      help.textContent = `객체 #${sam3CurrentIdx}가 다시 포함되었습니다.`;
+      if (typeof data.toggled_index === 'number') sam3SelectedIndices.add(data.toggled_index);
+    }
+    else if (data.action === 'removed') {
+      help.textContent = '선택 객체가 제거되었습니다.';
+    }
+    else if (data.action === 'added') {
+      help.textContent = '새 객체가 생성되었습니다.';
+      if (typeof data.current_idx === 'number') sam3SelectedIndices.add(data.current_idx);
+    }
+    else if (data.action === 'selected') help.textContent = `객체 #${sam3CurrentIdx} 선택됨`;
+    else help.textContent = '클릭 반영됨';
+    if (Array.isArray(data.instances)) renderInstanceList(data.instances);
+    reloadOverlay();
+  };
+  overlayImg.oncontextmenu = (e) => { e.preventDefault(); return false; };
+  reloadOverlay();
+}
+
+function closeSam3Modal() {
+  const modal = document.getElementById('sam3Modal');
+  modal.style.display = 'none';
+  sam3Session = null;
+}
+
+// Multi-image correction: every image is already segmented (sessions started).
+// Show a thumbnail strip to switch between images and correct each in the main
+// canvas, then commit ALL sessions at once (auto_run_pipeline=false) and return
+// their session ids. Resolves on "전체 보정 완료", rejects on cancel.
+function openSam3MultiModal(sessionObjs, opts) {
+  return new Promise((resolve, reject) => {
+    const modal = document.getElementById('sam3Modal');
+    const overlayImg = document.getElementById('sam3OverlayImg');
+    const list = document.getElementById('sam3InstanceList');
+    const help = document.getElementById('sam3HelpText');
+    const strip = document.getElementById('sam3ThumbStrip');
+    const commitBtn = document.getElementById('sam3CommitBtn');
+    const closeBtn = document.getElementById('sam3CloseBtn');
+    const prevLabel = commitBtn.textContent;
+
+    modal.style.display = 'flex';
+    strip.style.display = 'flex';
+    commitBtn.textContent = `전체 보정 완료 후 실행 (${sessionObjs.length}장)`;
+
+    let active = 0;
+    const thumbs = [];
+
+    const reloadOverlay = () => {
+      const s = sessionObjs[active];
+      const url = `${s.overlay_url}?t=${Date.now()}`;
+      overlayImg.src = url;
+      if (thumbs[active]) thumbs[active].querySelector('img').src = url;
+    };
+
+    const renderInstanceList = () => {
+      const s = sessionObjs[active];
+      list.innerHTML = '';
+      const valid = new Set((s.instances || []).map(it => it.index));
+      s.selected = new Set([...s.selected].filter(i => valid.has(i)));
+      sam3SelectedIndices = s.selected;
+      (s.instances || []).forEach(it => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;';
+        const chk = document.createElement('input');
+        chk.type = 'checkbox';
+        const isEnabled = (typeof it.enabled === 'boolean') ? it.enabled : s.selected.has(it.index);
+        chk.checked = isEnabled;
+        if (isEnabled) s.selected.add(it.index); else s.selected.delete(it.index);
+        chk.onchange = async () => {
+          const data = await fetchJson(`/api/sam3/interactive/${s.session_id}/set_enabled`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ instance_index: it.index, enabled: chk.checked })
+          });
+          if (chk.checked) s.selected.add(it.index); else s.selected.delete(it.index);
+          if (Array.isArray(data.instances)) s.instances = data.instances;
+          renderInstanceList(); reloadOverlay();
+        };
+        const btn = document.createElement('button');
+        btn.textContent = `#${it.index} ${it.label} (${it.score.toFixed(2)})`;
+        btn.style.cssText = 'flex:1;text-align:left;border:1px solid #d1d5db;border-radius:8px;padding:8px;background:#fff;cursor:pointer;';
+        if (it.index === s.currentIdx) { btn.style.borderColor = '#2563eb'; btn.style.background = '#eff6ff'; }
+        btn.onclick = async () => {
+          s.currentIdx = it.index; sam3CurrentIdx = it.index;
+          await fetchJson(`/api/sam3/interactive/${s.session_id}/select`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ instance_index: it.index })
+          });
+          help.textContent = `선택: #${it.index} ${it.label}`;
+          renderInstanceList(); reloadOverlay();
+        };
+        row.appendChild(chk); row.appendChild(btn); list.appendChild(row);
+      });
+    };
+
+    const switchTo = (i) => {
+      active = i;
+      const s = sessionObjs[i];
+      sam3Session = s.session_id;
+      sam3CurrentIdx = s.currentIdx;
+      sam3SelectedIndices = s.selected;
+      thumbs.forEach((t, k) => { t.style.outline = (k === i) ? '3px solid #2563eb' : '2px solid transparent'; });
+      help.textContent = `[${i + 1}/${sessionObjs.length}] ${s.file.name} — 빈 곳 클릭=새 객체, 객체 클릭=선택/제외`;
+      renderInstanceList();
+      reloadOverlay();
+    };
+
+    strip.innerHTML = '';
+    sessionObjs.forEach((s, i) => {
+      const t = document.createElement('div');
+      t.style.cssText = 'flex:0 0 auto;cursor:pointer;border-radius:8px;outline:2px solid transparent;padding:2px;';
+      const im = document.createElement('img');
+      im.src = `${s.overlay_url}?t=${Date.now()}`;
+      im.style.cssText = 'height:56px;width:auto;border-radius:6px;display:block;';
+      const cap = document.createElement('div');
+      cap.textContent = `${i + 1}`;
+      cap.style.cssText = 'font-size:10px;text-align:center;color:#6b7280;';
+      t.appendChild(im); t.appendChild(cap);
+      t.onclick = () => switchTo(i);
+      thumbs.push(t); strip.appendChild(t);
+    });
+
+    overlayImg.onmousedown = async (e) => {
+      if (e.button !== 0 && e.button !== 2) return;
+      e.preventDefault();
+      if (!overlayImg.naturalWidth || !overlayImg.naturalHeight) return;
+      const s = sessionObjs[active];
+      const rect = overlayImg.getBoundingClientRect();
+      const x = Math.max(0, Math.round((e.clientX - rect.left) / rect.width * overlayImg.naturalWidth));
+      const y = Math.max(0, Math.round((e.clientY - rect.top) / rect.height * overlayImg.naturalHeight));
+      const data = await fetchJson(`/api/sam3/interactive/${s.session_id}/tap`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ x, y, label: 1, instance_index: s.currentIdx, new_label: 'furniture' })
+      });
+      if (typeof data.current_idx === 'number') { s.currentIdx = data.current_idx; sam3CurrentIdx = data.current_idx; }
+      if (data.action === 'toggled_off' && typeof data.toggled_index === 'number') s.selected.delete(data.toggled_index);
+      else if (data.action === 'toggled_on' && typeof data.toggled_index === 'number') s.selected.add(data.toggled_index);
+      else if (data.action === 'added' && typeof data.current_idx === 'number') s.selected.add(data.current_idx);
+      if (Array.isArray(data.instances)) s.instances = data.instances;
+      renderInstanceList(); reloadOverlay();
+    };
+    overlayImg.oncontextmenu = (e) => { e.preventDefault(); return false; };
+
+    const cleanup = () => {
+      strip.style.display = 'none';
+      strip.innerHTML = '';
+      commitBtn.textContent = prevLabel;
+      commitBtn.disabled = false;
+      closeSam3Modal();
+    };
+
+    commitBtn.onclick = async () => {
+      commitBtn.disabled = true;
+      try {
+        const ids = [];
+        for (let i = 0; i < sessionObjs.length; i++) {
+          const s = sessionObjs[i];
+          help.textContent = `커밋 중 ${i + 1}/${sessionObjs.length}...`;
+          const cf = new FormData();
+          cf.append('scene_name', s.file.name.replace(/\.[^.]+$/, ''));
+          cf.append('selected_indices', Array.from(s.selected).sort((a, b) => a - b).join(','));
+          cf.append('auto_run_pipeline', 'false');
+          cf.append('from_elevator', String(opts.from_elevator));
+          cf.append('from_floor', String(opts.from_floor));
+          cf.append('to_elevator', String(opts.to_elevator));
+          cf.append('to_floor', String(opts.to_floor));
+          cf.append('distance_km', String(opts.distance_km));
+          await fetchJson(`/api/sam3/interactive/${s.session_id}/commit`, { method: 'POST', body: cf });
+          ids.push(s.session_id);
+        }
+        cleanup();
+        resolve(ids);
+      } catch (e) {
+        commitBtn.disabled = false;
+        reject(e);
+      }
+    };
+    closeBtn.onclick = () => { cleanup(); reject(new Error('인터랙티브 보정이 취소되었습니다.')); };
+
+    switchTo(0);
+  });
+}
 
 async function waitJob(jobId, idx, total) {
   while (true) {

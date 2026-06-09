@@ -51,3 +51,16 @@ external/
 run_single_image.sh
 src/taming-transformers/
 web_demo/runtime/
+
+# SAM3 integration: experiment inputs & misc local artifacts
+test_images/
+input*.png
+input*.jpg
+pf_*.png
+chair_multiview.png
+objects_3d.png
+mobileclip2_b.ts
+_anonymized/
+experiments.txt
+*.bak
+web_demo/server.log

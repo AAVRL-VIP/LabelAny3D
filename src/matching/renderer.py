@@ -47,6 +47,7 @@ class GLBRenderer:
             image_size=image_size,
             blur_radius=0.0,
             faces_per_pixel=1,
+            bin_size=0,
         )
         
         lights = PointLights(

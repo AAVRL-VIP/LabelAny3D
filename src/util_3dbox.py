@@ -14,6 +14,30 @@ from sklearn.decomposition import PCA
 
 
 # =============================================================================
+# Flat-object (TV/monitor) handling
+# =============================================================================
+# Flat panel objects are reconstructed as razor-thin, often tilted/lying sheets,
+# which makes the generic axis-aligned box collapse to a sliver with the wrong
+# axis as "thickness". For these categories we instead build the box from a
+# stable frame (gravity up + camera-facing normal) and clamp the front-to-back
+# thickness to a fixed value when it comes out implausibly large.
+# See estimate_bbox / _estimate_flat_panel_bbox.
+FLAT_CATEGORIES = {
+    'tv', 'television', 'monitor', 'tv_monitor', 'tvmonitor',
+    'screen', 'computer_monitor', 'display',
+}
+FLAT_DEPTH_THRESHOLD = 0.20   # meters; clamp thickness only when it exceeds this
+FLAT_FIXED_DEPTH = 0.04       # meters; fixed thickness applied when clamping
+
+
+def _normalize_category(cat_name):
+    """Lowercase and normalize a category name for flat-object matching."""
+    if not cat_name:
+        return ''
+    return str(cat_name).strip().lower().replace(' ', '_')
+
+
+# =============================================================================
 # Basic Geometry Functions
 # =============================================================================
 
@@ -142,6 +166,15 @@ def estimate_bbox(in_pc, cat_name=None, ground_equ=None, method='pca'):
     if len(rotated_pc) == 0:
         raise ValueError("No valid points after removing NaN values")
 
+    # Flat panel objects (TV/monitor/screen) are reconstructed as razor-thin
+    # sheets that single-view depth alignment often leaves tilted/lying down, so
+    # the usual axis-aligned fit puts the thin "thickness" on the wrong axis and
+    # the box collapses to a sliver. For these we build the box from a stable
+    # frame instead: vertical from the (shared) gravity up, the thin axis facing
+    # the camera, and a fixed thickness. See _estimate_flat_panel_bbox.
+    if _normalize_category(cat_name) in FLAT_CATEGORIES:
+        return _estimate_flat_panel_bbox(rotated_pc, rotation_matrix)
+
     # Determine yaw using selected method
     if method == 'convex_hull':
         yaw = _estimate_yaw_convex_hull(rotated_pc)
@@ -178,6 +211,68 @@ def estimate_bbox(in_pc, cat_name=None, ground_equ=None, method='pca'):
 
     dimension = [dz, dy, dx]
     R_cam = rotation_matrix.T @ rotate_y(-yaw)
+
+    return vertices, center_cam, dimension, R_cam
+
+
+def _estimate_flat_panel_bbox(rotated_pc, rotation_matrix):
+    """
+    Build an oriented box for a flat panel (TV/monitor) in a stable frame.
+
+    The point cloud is already ground-aligned (gravity -> [0, -1, 0]). We orient
+    the box with: height along world up, the thin (thickness) axis pointing back
+    toward the camera so the panel faces the viewer, and width perpendicular to
+    both. Thickness is clamped to a fixed value when implausibly large, which is
+    the normal case for these mis-reconstructed sheets.
+
+    Args:
+        rotated_pc: ground-aligned point cloud (N, 3), camera at the origin
+        rotation_matrix: maps ground-aligned frame back to camera (row convention)
+
+    Returns:
+        vertices, center_cam, dimension [depth, height, width], R_cam
+    """
+    up = np.array([0.0, 1.0, 0.0])
+
+    # Direction from the object back toward the camera (origin), in the
+    # ground-aligned frame; its horizontal component is the panel normal.
+    cam_dir = -rotated_pc.mean(axis=0)
+    normal = cam_dir - np.dot(cam_dir, up) * up
+    norm = np.linalg.norm(normal)
+    if norm < 1e-6:
+        # Object sits directly above/below the camera: pick an arbitrary horizontal.
+        normal = np.array([0.0, 0.0, 1.0])
+    else:
+        normal = normal / norm
+
+    width_axis = np.cross(up, normal)
+    width_axis = width_axis / np.linalg.norm(width_axis)
+    axes = np.vstack([width_axis, up, normal])  # rows: width, height, thickness
+
+    proj = rotated_pc @ axes.T
+    lo = np.percentile(proj, 2, axis=0)
+    hi = np.percentile(proj, 98, axis=0)
+    center_axis = (lo + hi) / 2
+    width, height, thick = hi - lo
+
+    if thick > FLAT_DEPTH_THRESHOLD:
+        print(f"[flat] clamping thickness {thick:.3f} -> {FLAT_FIXED_DEPTH:.3f}")
+        thick = FLAT_FIXED_DEPTH
+    print(f"[flat] width={width:.3f}, height={height:.3f}, thick={thick:.3f}")
+
+    # Corners ordered to match convert_box_vertices: local x=width, y=height, z=thickness.
+    hw, hh, ht = width / 2, height / 2, thick / 2
+    local = np.array([
+        [-hw, -hh, -ht], [hw, -hh, -ht], [hw, hh, -ht], [-hw, hh, -ht],
+        [-hw, -hh,  ht], [hw, -hh,  ht], [hw, hh,  ht], [-hw, hh,  ht],
+    ])
+    corners_rot = center_axis @ axes + local @ axes  # ground-aligned frame
+    vertices = (corners_rot @ rotation_matrix.T).astype(np.float16)
+    center_cam = corners_rot.mean(axis=0) @ rotation_matrix.T
+
+    # R_cam: columns are the width/height/thickness axes expressed in camera frame.
+    R_cam = (axes @ rotation_matrix.T).T
+    dimension = [float(thick), float(height), float(width)]  # [depth, height, width]
 
     return vertices, center_cam, dimension, R_cam
 
@@ -232,6 +327,42 @@ def _estimate_yaw_convex_hull(rotated_pc):
 # Scene Processing Functions
 # =============================================================================
 
+def _scene_gravity_up(recons_dir, objs):
+    """
+    Estimate a shared gravity-up direction from the upright (non-flat) objects in
+    the scene. Flat panels (TV/monitor) have unreliable per-object up vectors, so
+    they are excluded and instead reuse this shared estimate.
+
+    Returns a unit 3-vector, or None if there is no usable reference object.
+    """
+    ups = []
+    for obj in objs:
+        parts = obj.split("_", 1)
+        if len(parts) < 2:
+            continue
+        category = parts[1].split(".", 1)[0]
+        if _normalize_category(category) in FLAT_CATEGORIES:
+            continue
+        up_path = os.path.join(recons_dir, f"{obj.split('.', 1)[0]}_canonical_upright.npy")
+        if not os.path.exists(up_path):
+            continue
+        u = np.load(up_path)[:3]
+        n = np.linalg.norm(u)
+        if n < 1e-6:
+            continue
+        ups.append(u / n)
+
+    if not ups:
+        return None
+    ref = ups[0]
+    aligned = [u if np.dot(u, ref) >= 0 else -u for u in ups]  # bring to a common hemisphere
+    g = np.mean(aligned, axis=0)
+    gn = np.linalg.norm(g)
+    if gn < 1e-6:
+        return None
+    return g / gn
+
+
 def save_3d_with_ground_alignment_bbox(scene_dir, bbox_method='pca'):
     """
     Save 3D bounding boxes with ground alignment for all objects in a scene.
@@ -250,6 +381,10 @@ def save_3d_with_ground_alignment_bbox(scene_dir, bbox_method='pca'):
         if item not in ['full_scene.glb', 'background.ply'] and item.endswith('.glb')
     ]
     bbox_list = []
+
+    # Shared gravity-up from upright objects; flat panels reuse it instead of
+    # their own unreliable per-object up vector.
+    scene_up = _scene_gravity_up(recons_dir, objs)
 
     for obj in objs:
         obj_dict = {}
@@ -273,11 +408,16 @@ def save_3d_with_ground_alignment_bbox(scene_dir, bbox_method='pca'):
         point_cloud = mesh.sample(500)
         point_clouds = trimesh.points.PointCloud(point_cloud)
 
+        # Use the shared gravity-up for flat panels when available.
+        ground_equ = canonical_upright
+        if _normalize_category(category) in FLAT_CATEGORIES and scene_up is not None:
+            ground_equ = np.append(scene_up, 0.0)
+
         try:
             boxes3d, center_cam, dimensions, R_cam = estimate_bbox(
                 np.array(point_clouds.vertices),
                 category,
-                canonical_upright,
+                ground_equ,
                 method=bbox_method
             )
         except Exception as e:
