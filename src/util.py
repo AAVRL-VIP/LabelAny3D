@@ -348,23 +348,66 @@ def read_bounding_boxes_segmentations(annotations_path_or_list, image_size):
     else:
         annotations = annotations_path_or_list
 
+    def compute_border_ratio(mask, border_px=20):
+        """
+        이미지 가장자리 border_px 영역 안에 mask 픽셀이 얼마나 많이 들어있는지 계산.
+        값이 클수록 경계에 많이 걸친 객체.
+        """
+        mask_bool = mask.astype(bool)
+
+        border = np.zeros_like(mask_bool, dtype=bool)
+        border[:border_px, :] = True
+        border[-border_px:, :] = True
+        border[:, :border_px] = True
+        border[:, -border_px:] = True
+
+        mask_area = float(mask_bool.sum())
+        if mask_area <= 0:
+            return 1.0
+
+        border_area = float((mask_bool & border).sum())
+        return border_area / mask_area
+
+    def count_touched_sides(mask):
+        """
+        mask가 이미지 네 경계 중 몇 군데에 닿았는지 계산.
+        """
+        mask_bool = mask.astype(bool)
+
+        touch_top = mask_bool[0, :].any()
+        touch_bottom = mask_bool[-1, :].any()
+        touch_left = mask_bool[:, 0].any()
+        touch_right = mask_bool[:, -1].any()
+
+        return int(touch_top) + int(touch_bottom) + int(touch_left) + int(touch_right)
+
     # Extract bounding boxes from the annotations
     bboxes = []
     segmentation_mask = []
     category_ids = []
+
+    # 너무 많이 잘린 객체만 제거하기 위한 기준
+    border_px = int(os.environ.get("BORDER_PX", "20"))
+    max_border_ratio = float(os.environ.get("MAX_BORDER_RATIO", "0.20"))
+    min_touch_sides_to_drop = int(os.environ.get("MIN_TOUCH_SIDES_TO_DROP", "2"))
+
     for index, annotation in enumerate(annotations):
         if annotation["iscrowd"]:
             print("Skip crowd annotation")
             continue
+
         if "segmentation" in annotation:
             seg = annotation["segmentation"]
+
             # Check if segmentation is RLE format (dict with 'counts') or polygon format (list)
             if isinstance(seg, dict) and 'counts' in seg:
                 # RLE format from COCONUT - make a copy to avoid modifying original
                 rle = {'size': seg['size'], 'counts': seg['counts']}
                 if isinstance(rle['counts'], str):
                     rle['counts'] = rle['counts'].encode('utf-8')
+
                 mask = mask_utils.decode(rle).astype(bool)
+
                 rows = np.any(mask, axis=1)
                 height = np.sum(rows)
             else:
@@ -372,17 +415,47 @@ def read_bounding_boxes_segmentations(annotations_path_or_list, image_size):
                 mask, height = create_boolean_mask_from_polygon(image_size, seg)
 
             is_truncated, is_scaleable = analyze_mask(mask, image_size)
-            if (height/image_size[1] > 0.000625 and not is_truncated and is_scaleable): # object must be 6.25% of the orginal image height
+
+            height_ratio = height / image_size[1]
+            border_ratio = compute_border_ratio(mask, border_px=border_px)
+            touched_sides = count_touched_sides(mask)
+
+            # 기존 조건:
+            #   height_ratio > 0.000625 and not is_truncated and is_scaleable
+            #
+            # 수정 조건:
+            #   1) 너무 작은 객체는 제외
+            #   2) scale 불가능한 객체는 제외
+            #   3) 가장자리에 닿았다는 이유만으로는 제외하지 않음
+            #   4) 여러 경계에 닿고 + border 영역 비율이 큰 경우만 "너무 많이 잘림"으로 보고 제외
+            too_small = height_ratio <= 0.000625
+            too_truncated = (
+                touched_sides >= min_touch_sides_to_drop
+                and border_ratio > max_border_ratio
+            )
+
+            if (not too_small) and is_scaleable and (not too_truncated):
                 segmentation_mask.append(mask)
-                # Prefer annotation-provided category_name when available (single-image pipeline).
                 category_ids.append(annotation.get("category_name", annotation["category_id"]))
-                bboxes.append(annotation["bbox"])  # Add the bbox to the list
+                bboxes.append(annotation["bbox"])
             else:
-                print("Too small segmentation")
-        
-    return bboxes, np.array(segmentation_mask), np.arange(len(segmentation_mask)), replace_categories_with_supercategories(category_ids)
+                print(
+                    "Skip segmentation: "
+                    f"too_small={too_small}, "
+                    f"is_truncated={is_truncated}, "
+                    f"is_scaleable={is_scaleable}, "
+                    f"too_truncated={too_truncated}, "
+                    f"height_ratio={height_ratio:.6f}, "
+                    f"border_ratio={border_ratio:.3f}, "
+                    f"touched_sides={touched_sides}"
+                )
 
-
+    return (
+        bboxes,
+        np.array(segmentation_mask),
+        np.arange(len(segmentation_mask)),
+        replace_categories_with_supercategories(category_ids)
+    )
 
 def create_boolean_mask_from_polygon(image_shape, segmentation):
     """
