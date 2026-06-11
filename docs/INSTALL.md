@@ -186,27 +186,5 @@ Install the web demo requirements.
 pip install -r web_demo/requirements.txt
 ```
 
-## 15. Run the Web Demo
 
-Start the web demo server.
-
-```bash
-uvicorn web_demo.app:app --host 0.0.0.0 --port 8000
-```
-
-## 16. Run a Single Image
-
-Run the full single-image pipeline from the main `labelany3d` environment.
-
-Replace `path/to/image` with the input image path.
-
-```bash
-conda activate labelany3d
-cd /workspace/LabelAny3D-main
-
-export SAM_PYTHON=/venv/sam/bin/python
-export GPU_IDX=0
-export OBJ_REC=amodal3r
-
-bash run_single_full_pipeline_parallel.sh path/to/image
 ```
