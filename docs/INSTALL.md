@@ -184,7 +184,4 @@ Install the web demo requirements.
 
 ```bash
 pip install -r web_demo/requirements.txt
-```
 
-
-```
