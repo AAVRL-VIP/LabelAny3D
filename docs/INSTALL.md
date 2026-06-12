@@ -46,6 +46,7 @@ Install Diffusers and the repository requirements.
 ```bash
 pip install diffusers==0.30.0
 pip install -r requirements.txt
+. env/setup.sh --basic --xformers --diffoctreerast --spconv --mipgaussian --nvdiffrast
 ```
 
 Install PyTorch3D, Detectron2, and pycocotools.
@@ -83,22 +84,7 @@ cd $EXT_DIR/checkpoints
 bash download.sh
 ```
 
-## 8. Install TRELLIS CUDA Extensions
-
-Set the C and C++ compilers before building the remaining CUDA extensions.
-
-```bash
-export CC=$(which gcc)
-export CXX=$(which g++)
-```
-
-TRELLIS provides CUDA extensions required by the 3D reconstruction stack.
-
-```bash
-cd $EXT_DIR/TRELLIS
-. ./setup.sh --basic --xformers --diffoctreerast --spconv --mipgaussian --nvdiffrast
-```
-## 9. Download Amodal3R
+## 8. Download Amodal3R
 
 Amodal3R is used as the 3D reconstruction backend.
 
@@ -108,7 +94,7 @@ cd $EXT_DIR
 git clone https://github.com/Sm0kyWu/Amodal3R.git Amodal3R
 cd Amodal3R
 ```
-## 10. Install Amodal3R Runtime Dependencies
+## 9. Install Amodal3R Runtime Dependencies
 
 Install xFormers for the PyTorch 2.2.2 CUDA 12.1 environment.
 
@@ -129,7 +115,7 @@ python -m pip install /tmp/extensions/mip-splatting/submodules/diff-gaussian-ras
 ```
 
 
-## 11. Install flash-attn
+## 10. Install flash-attn
 
 Download and install the flash-attn wheel matching Python 3.10, PyTorch 2.2, and CUDA 12.
 
@@ -146,7 +132,7 @@ pip install /tmp/flash_attn-2.7.4.post1+cu12torch2.2cxx11abiFALSE-cp310-cp310-li
 rm -f /tmp/flash_attn-2.7.4.post1+cu12torch2.2cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
 ```
 
-## 12. Create the SAM3 Environment
+## 11. Create the SAM3 Environment
 
 Create the separate SAM3 conda environment from `envs/sam_conda_explicit.txt`.
 
@@ -169,7 +155,7 @@ Install the SAM3 Python requirements.
 python -m pip install -r envs/sam_requirements.txt
 ```
 
-## 13. Log in to Hugging Face
+## 12. Log in to Hugging Face
 
 SAM3 requires Hugging Face authentication for gated model files.
 
@@ -178,7 +164,7 @@ conda activate sam
 hf auth login
 ```
 
-## 14. Install Web Demo Requirements
+## 13. Install Web Demo Requirements
 
 Install the web demo requirements.
 
