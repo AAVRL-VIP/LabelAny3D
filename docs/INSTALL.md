@@ -83,7 +83,22 @@ cd $EXT_DIR/checkpoints
 bash download.sh
 ```
 
-## 8. Download Amodal3R
+## 8. Install TRELLIS CUDA Extensions
+
+Set the C and C++ compilers before building the remaining CUDA extensions.
+
+```bash
+export CC=$(which gcc)
+export CXX=$(which g++)
+```
+
+TRELLIS provides CUDA extensions required by the 3D reconstruction stack.
+
+```bash
+cd $EXT_DIR/TRELLIS
+. ./setup.sh --basic --xformers --diffoctreerast --spconv --mipgaussian --nvdiffrast
+```
+## 9. Download Amodal3R
 
 Amodal3R is used as the 3D reconstruction backend.
 
@@ -93,22 +108,6 @@ cd $EXT_DIR
 git clone https://github.com/Sm0kyWu/Amodal3R.git Amodal3R
 cd Amodal3R
 ```
-Set the C and C++ compilers before building the remaining CUDA extensions.
-
-```bash
-export CC=$(which gcc)
-export CXX=$(which g++)
-```
-
-## 9. Install TRELLIS CUDA Extensions
-
-TRELLIS provides CUDA extensions required by the 3D reconstruction stack.
-
-```bash
-cd $EXT_DIR/TRELLIS
-. ./setup.sh --basic --xformers --diffoctreerast --spconv --mipgaussian --nvdiffrast
-```
-
 ## 10. Install Amodal3R Runtime Dependencies
 
 Install xFormers for the PyTorch 2.2.2 CUDA 12.1 environment.
