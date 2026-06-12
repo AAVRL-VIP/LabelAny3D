@@ -152,6 +152,7 @@ rm -f /tmp/flash_attn-2.7.4.post1+cu12torch2.2cxx11abiFALSE-cp310-cp310-linux_x8
 Create the separate SAM3 conda environment from `envs/sam_conda_explicit.txt`.
 
 ```bash
+cd path/to/LabelAny3D
 conda create -n sam --file envs/sam_conda_explicit.txt -y
 conda activate sam
 ```
