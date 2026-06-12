@@ -9,7 +9,7 @@ sys.path = ['./'] + sys.path
 
 from dataset_model import get_scene
 from pathlib import Path
-from model_wrappers import infer_with_trellis, infer_with_hunyuan, infer_with_amodal3r
+from model_wrappers import infer_with_amodal3r
 from batch_scripts.coconut_loader import CoconutLoader, get_dataset_paths
 import random
 import numpy as np
@@ -25,17 +25,10 @@ torch.backends.cudnn.benchmark = False
 
 
 def reconstruct_object(run_opt, out_dir, obj_id):
-    if run_opt.obj_rec == 'trellis':
-        print("trellis is used for reconstruction")
-        infer_with_trellis(out_dir, obj_id)
-    elif run_opt.obj_rec == 'hunyuan3d':
-        print("hunyuan3d is used for reconstruction")
-        infer_with_hunyuan(out_dir, obj_id)
-    elif run_opt.obj_rec == 'amodal3r':
-        print("amodal3r is used for reconstruction")
-        infer_with_amodal3r(out_dir, obj_id)
-    else:
-        raise ValueError(f"Unknown reconstruction model: {run_opt.obj_rec}. Use 'trellis', 'hunyuan3d', or 'amodal3r'.")
+    if run_opt.obj_rec != 'amodal3r':
+        raise ValueError(f"Unsupported reconstruction model: {run_opt.obj_rec}. Only 'amodal3r' is supported.")
+    print("amodal3r is used for reconstruction")
+    infer_with_amodal3r(out_dir, obj_id)
 
 
 if __name__ == "__main__":
@@ -47,7 +40,7 @@ if __name__ == "__main__":
     parser.add_argument('--end_index', type=int, default=1, help='Object index to end processing')
     parser.add_argument("--split", help="split", default="val", type=str)
     parser.add_argument("--save_dir", help="save directory", default="../experimental_results/COCO/", type=str)
-    parser.add_argument("--obj_rec", help="reconstruction model", default="trellis", choices=["trellis", "hunyuan3d", "amodal3r"], type=str)
+    parser.add_argument("--obj_rec", help="reconstruction model", default="amodal3r", choices=["amodal3r"], type=str)
     parser.add_argument("--image_path", type=str, default="", help="single image path for single-image mode")
 
     args, extras = parser.parse_known_args()
