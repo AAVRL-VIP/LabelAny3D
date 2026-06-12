@@ -67,7 +67,9 @@ Predicted truck tonnage vs. ground truth (GT):
 ```bash
 cd web_demo
 pip install -r requirements.txt
-uvicorn app:app --host 0.0.0.0 --port 8000
+# SAM3 lives in the separate `sam` env, so point the server at it for
+# interactive segmentation. Adjust the path to your sam env's python.
+SAM_PYTHON=/opt/conda/envs/sam/bin/python uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
 Open `http://localhost:8000` → upload a room photo → enter moving details (floor, elevator, distance) → get the estimate.
@@ -78,6 +80,12 @@ The web demo supports **interactive segmentation**: when automatic segmentation 
 
 ```bash
 bash run_single_full_pipeline_parallel.sh /abs/path/image.jpg
+```
+
+A sample room photo is bundled at [samples/sample_room.jpg](samples/sample_room.jpg), so you can try the pipeline right away:
+
+```bash
+bash run_single_full_pipeline_parallel.sh "$(pwd)/samples/sample_room.jpg"
 ```
 
 > ⚠️ The standalone server run has **no instance-exclusion (interactive selection) feature.** Every furniture instance detected by SAM3 is included in 3D reconstruction and volume computation as-is. To exclude specific objects, use the web demo's interactive segmentation.
