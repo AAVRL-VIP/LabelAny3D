@@ -46,7 +46,7 @@ Install Diffusers and the repository requirements.
 ```bash
 pip install diffusers==0.30.0
 pip install -r requirements.txt
-. env/setup.sh --basic --xformers --diffoctreerast --spconv --mipgaussian --nvdiffrast
+. envs/setup.sh --basic --xformers --diffoctreerast --spconv --mipgaussian --nvdiffrast
 ```
 
 Install PyTorch3D, Detectron2, and pycocotools.
