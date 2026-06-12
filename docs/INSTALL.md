@@ -93,8 +93,23 @@ cd $EXT_DIR
 git clone https://github.com/Sm0kyWu/Amodal3R.git Amodal3R
 cd Amodal3R
 ```
+Set the C and C++ compilers before building the remaining CUDA extensions.
 
-## 9. Install Amodal3R Runtime Dependencies
+```bash
+export CC=$(which gcc)
+export CXX=$(which g++)
+```
+
+## 9. Install TRELLIS CUDA Extensions
+
+TRELLIS provides CUDA extensions required by the 3D reconstruction stack.
+
+```bash
+cd $EXT_DIR/TRELLIS
+. ./setup.sh --basic --xformers --diffoctreerast --spconv --mipgaussian --nvdiffrast
+```
+
+## 10. Install Amodal3R Runtime Dependencies
 
 Install xFormers for the PyTorch 2.2.2 CUDA 12.1 environment.
 
@@ -114,21 +129,6 @@ Install the Gaussian rasterization dependency used by Amodal3R.
 python -m pip install /tmp/extensions/mip-splatting/submodules/diff-gaussian-rasterization --no-build-isolation
 ```
 
-Set the C and C++ compilers before building the remaining CUDA extensions.
-
-```bash
-export CC=$(which gcc)
-export CXX=$(which g++)
-```
-
-## 10. Install TRELLIS CUDA Extensions
-
-TRELLIS provides CUDA extensions required by the 3D reconstruction stack.
-
-```bash
-cd $EXT_DIR/TRELLIS
-. ./setup.sh --basic --xformers --diffoctreerast --spconv --mipgaussian --nvdiffrast
-```
 
 ## 11. Install flash-attn
 
